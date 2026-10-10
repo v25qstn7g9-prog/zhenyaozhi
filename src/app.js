@@ -1916,6 +1916,10 @@
     document.getElementById('dayBadge').textContent = L('dayBadge', {n:streak});
   }
 
+  // Keep the page at 1:1 — iOS Safari ignores user-scalable=no, so block pinch here too (double-tap zoom is off via touch-action in the CSS).
+  ['gesturestart','gesturechange','gestureend'].forEach(function(t){ document.addEventListener(t, function(e){ e.preventDefault(); }, {passive:false}); });
+  document.addEventListener('touchmove', function(e){ if (e.touches && e.touches.length > 1) e.preventDefault(); }, {passive:false});
+
   initPersistence().then(function(){
     LANG = (mem.profile && mem.profile.lang) || 'zh';
     updateNavLabels();
