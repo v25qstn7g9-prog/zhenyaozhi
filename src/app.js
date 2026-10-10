@@ -193,7 +193,7 @@
     writeLocalStorage();
   }
 
-  /* ---------- backup / restore (export file or text, re-import) ---------- */
+  /* ---------- backup / restore (export a file, re-import it) ---------- */
   function buildBackupObject(){
     return {app:'zhenyaozhi', version:1, exportedAt:new Date().toISOString(),
       profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases};
@@ -207,7 +207,7 @@
     return null;
   }
   // Real file on the live site: phones get the share sheet (儲存到「檔案」、LINE、Email…),
-  // computers get a normal download; copying the text is only the last resort.
+  // everything else gets a normal download.
   function backupFileName(){ return 'zhenyaozhi-backup-'+todayISO+'.json'; }
   function downloadBlob(blob, name){
     var url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -233,9 +233,7 @@
       }
     }
     try{ downloadBlob(blob, name); return {ok:true, mode:'file'}; }
-    catch(e){ /* fall through */ }
-    var copied = await copyToClipboard(text);
-    return {ok:copied, mode:'clipboard'};
+    catch(e){ return {ok:false, mode:'file'}; }
   }
   function backupCounts(obj){
     return {w:obj.weights.length, s:obj.injections.length,
@@ -931,7 +929,7 @@
       var btn = this, orig = btn.textContent;
       btn.textContent = L('msg_processing');
       exportBackupFile().then(function(res){
-        btn.textContent = res.mode==='cancelled' ? orig : !res.ok ? L('msg_exportFailed') : (res.mode==='share' ? L('msg_exportedShare') : res.mode==='file' ? L('msg_exportedFile') : L('msg_exportedClipboard'));
+        btn.textContent = res.mode==='cancelled' ? orig : !res.ok ? L('msg_exportFailed') : (res.mode==='share' ? L('msg_exportedShare') : L('msg_exportedFile'));
         setTimeout(function(){ btn.textContent = orig; }, 2200);
       });
     };

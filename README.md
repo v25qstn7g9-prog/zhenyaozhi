@@ -16,7 +16,7 @@ GLP-1 注射與體重紀錄的個人網頁 App（純前端，沒有後端）。
 ## 資料
 
 - 全部存在使用者手機瀏覽器的 localStorage，key 是 `zhenyaozhi.records.v1`，格式 `{profile, weights, injections, meals, purchases}`。`meals` 是 2026-10 新增的，舊資料沒有這欄會當成空清單；`profile.kcalTarget` 是每日熱量目標（預設 1500）。
-- 改版時不要改這個 key 或欄位，否則手機裡的舊紀錄會讀不到。要改格式前先請使用者在「設定 → 下載備份檔」匯出備份。
+- 改版時不要改這個 key 或欄位，否則手機裡的舊紀錄會讀不到。要改格式前先請使用者在「設定 → 備份與還原 → 備份」匯出備份檔。
 
 - 2026-10 第二批新增欄位（都是選填，舊資料照常讀）：`purchases`（帳本：`{date, medication, items:[{doseMg, qty}], price, place}`）；注射加 `medication`（`mounjaro`／`wegovy`）、`time`，部位多了 `c-abd-u`、`r-abd-m`、`l-abd-m`、`c-abd-l`；體重加 `time`、`musclePercent`、`waistCm`、`leanKg`、`custom:[{name, value}]`。有帳本紀錄時，累計花費以帳本為準。
 
