@@ -624,6 +624,7 @@
     camera:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="14" r="3.5"/></svg>',
     chat:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/></svg>',
     edit:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    calc:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7h7"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01M8.5 15h.01M12 15h.01M15.5 15h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/></svg>',
     down:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 9v8H9"/></svg>'
   };
   function renderHome(){
@@ -782,7 +783,10 @@
 
     document.getElementById('view-shot').innerHTML =
       '<div class="card"><div id="calBox">'+calendarHTML()+'</div></div>' +
-      '<button class="btn primary block" id="addShotBtn">'+ICON.syringe+esc(L('shot_addBtn').replace('＋ ',''))+'</button>' +
+      '<div class="action-row">' +
+        '<button class="btn" id="penCalcBtn" type="button">'+ICON.calc+esc(L('pc_title'))+'</button>' +
+        '<button class="btn primary" id="addShotBtn">'+ICON.syringe+esc(L('shot_addBtn').replace('＋ ',''))+'</button>' +
+      '</div>' +
       '<div class="card">' +
         '<div class="card-head"><div><h2>'+esc(L('shot_rotationTitle'))+'</h2><div class="muted">'+esc(L('shot_rotateSub'))+'</div></div></div>' +
         '<div class="site-wrap">' +
@@ -807,6 +811,7 @@
       '</div>';
 
     document.getElementById('addShotBtn').onclick = openInjectionForm;
+    document.getElementById('penCalcBtn').onclick = openPenCalc;
     document.querySelectorAll('[data-del-shot]').forEach(function(b){
       b.onclick = function(){ deleteInjection(this.getAttribute('data-del-shot')).then(function(){ renderShot(); setTitle('shot'); }); };
     });
@@ -1178,6 +1183,70 @@
   function sheetHead(title, extra){
     return '<div class="sheet-head"><h3>'+esc(title)+'</h3><button id="closeSheet" type="button" aria-label="close">✕</button>' +
       (extra ? '<div class="head-extra">'+extra+'</div>' : '') + '</div>';
+  }
+
+  /* ---------- pen click calculator (格數換算) ---------- */
+  // Clicks for one full pen dose. Commonly cited reference values, not official specs:
+  // 猛健樂 (Mounjaro) KwikPen ≈ 60 clicks, 週纖達 (Wegovy) FlexTouch ≈ 74 clicks.
+  var MOUNJARO_FULL_CLICKS = 60;
+  var WEGOVY_FULL_CLICKS = 74;
+  var PEN_FULL_CLICKS = { mounjaro:MOUNJARO_FULL_CLICKS, wegovy:WEGOVY_FULL_CLICKS };
+  var PEN_CALC_KEY = 'zhenyaozhi.penCalc.v1';   // separate from the records key; UI preference only
+  function penClicks(desired, strength, med){
+    if (!(desired>0) || !(strength>0)) return null;
+    if (desired > strength) return 'over';
+    return Math.round(desired / strength * PEN_FULL_CLICKS[med]);
+  }
+  function openPenCalc(){
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(PEN_CALC_KEY)||'{}') || {}; } catch(e){ saved = {}; }
+    var med = MEDS[saved.med] ? saved.med : defaultMed();
+    var strength = {mounjaro:null, wegovy:null};
+    if (saved.strength) Object.keys(strength).forEach(function(k){ if (MEDS[k].indexOf(saved.strength[k])!==-1) strength[k] = saved.strength[k]; });
+    Object.keys(strength).forEach(function(k){ if (strength[k]==null) strength[k] = MEDS[k][0]; });
+    function persist(){ try { localStorage.setItem(PEN_CALC_KEY, JSON.stringify({med:med, strength:strength})); } catch(e){} }
+
+    sheetBody.innerHTML =
+      sheetHead(L('pc_title')) +
+      '<div class="note pc-sub" id="pc-sub"></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('pc_strength'))+'</div>' +
+        medSeg('pc-med', med) + '<div style="height:10px"></div>' +
+        '<div class="chip-grid" id="pc-doses"></div></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('pc_desired'))+'</div>' +
+        '<div class="unit-input"><input type="number" inputmode="decimal" step="0.05" min="0" id="pc-want"><span>mg</span></div></div>' +
+      '<div class="pc-result" id="pc-result"></div>' +
+      '<div class="note pc-disc" id="pc-disc"></div>';
+    overlay.classList.add('open');
+    sheetBody.scrollTop = 0;
+    document.getElementById('closeSheet').onclick = closeSheet;
+    var want = document.getElementById('pc-want');
+
+    function drawResult(){
+      var v = parseFloat(String(want.value).replace(',', '.'));
+      var r = penClicks(v, strength[med], med);
+      var box = document.getElementById('pc-result');
+      box.classList.toggle('warn', r==='over');
+      if (r==='over') box.innerHTML = '<span>'+esc(L('pc_over',{s:fmtDose(strength[med])}))+'</span>';
+      else box.innerHTML = '<span>'+esc(L('pc_turn'))+'</span><b class="num">'+(r==null?'—':r)+'</b><span>'+esc(L('pc_clicks'))+'</span>';
+    }
+    function draw(){
+      document.querySelectorAll('#pc-med button').forEach(function(x){ x.classList.toggle('active', x.getAttribute('data-med')===med); });
+      document.getElementById('pc-sub').textContent = L('pc_sub',{brand:medLabel(med)});
+      document.getElementById('pc-disc').textContent = L(med==='wegovy'?'pc_discWegovy':'pc_discMounjaro');
+      want.placeholder = L('pc_ph',{n: med==='wegovy'?'0.5':'2.5'});
+      document.getElementById('pc-doses').innerHTML = MEDS[med].map(function(d){
+        return '<button type="button" class="chip'+(strength[med]===d?' on':'')+'" data-dose="'+d+'">'+fmtDose(d)+'</button>';
+      }).join('');
+      document.querySelectorAll('#pc-doses [data-dose]').forEach(function(b){
+        b.onclick = function(){ strength[med] = +this.getAttribute('data-dose'); persist(); draw(); };
+      });
+      drawResult();
+    }
+    document.querySelectorAll('#pc-med button').forEach(function(b){
+      b.onclick = function(){ med = this.getAttribute('data-med'); persist(); draw(); };
+    });
+    want.oninput = drawResult;
+    draw();
   }
 
   function openInjectionForm(){
