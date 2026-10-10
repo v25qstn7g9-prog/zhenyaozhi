@@ -2,20 +2,36 @@
   "use strict";
 
   /* ---------- constants ---------- */
+  // Injection sites. The eight original ids stay valid; 2026-10 added four more abdomen points
+  // (8 around the navel). x/y are for the small 126×152 figure on the 注射 page; bx/by for the
+  // larger per-region figure (300×220) in the log sheet. The person's right side is on the viewer's left.
   var SITES = [
-    {id:'r-abd-l', x:48, y:72},
-    {id:'l-arm',   x:100,y:34},
-    {id:'r-arm',   x:26, y:34},
-    {id:'l-abd-u', x:78, y:56},
-    {id:'r-abd-u', x:48, y:56},
-    {id:'l-abd-l', x:78, y:72},
-    {id:'l-thigh', x:82, y:108},
-    {id:'r-thigh', x:44, y:108}
+    {id:'r-abd-u', r:'abd',   x:50, y:54, bx:92,  by:62},
+    {id:'c-abd-u', r:'abd',   x:63, y:52, bx:150, by:52},
+    {id:'l-abd-u', r:'abd',   x:76, y:54, bx:208, by:62},
+    {id:'r-abd-m', r:'abd',   x:49, y:64, bx:80,  by:112},
+    {id:'l-abd-m', r:'abd',   x:77, y:64, bx:220, by:112},
+    {id:'r-abd-l', r:'abd',   x:50, y:75, bx:92,  by:162},
+    {id:'c-abd-l', r:'abd',   x:63, y:77, bx:150, by:172},
+    {id:'l-abd-l', r:'abd',   x:76, y:75, bx:208, by:162},
+    {id:'r-arm',   r:'arm',   x:26, y:34, bx:70,  by:96},
+    {id:'l-arm',   r:'arm',   x:100,y:34, bx:230, by:96},
+    {id:'r-thigh', r:'thigh', x:44, y:108,bx:104, by:96},
+    {id:'l-thigh', r:'thigh', x:82, y:108,bx:196, by:96}
   ];
+  // Order used to suggest the next site inside a region (alternate sides, then the centre).
+  var ROTATION = ['r-abd-l','l-abd-u','r-abd-u','l-abd-l','r-abd-m','l-abd-m','c-abd-l','c-abd-u','r-arm','l-arm','r-thigh','l-thigh'];
+  var REGIONS = ['abd','arm','thigh'];
   var SITE_LABELS = {
-    zh:{'l-arm':'左上臂','r-arm':'右上臂','l-abd-u':'左上腹','r-abd-u':'右上腹','l-abd-l':'左下腹','r-abd-l':'右下腹','l-thigh':'左大腿','r-thigh':'右大腿'},
-    en:{'l-arm':'Left upper arm','r-arm':'Right upper arm','l-abd-u':'Left upper abdomen','r-abd-u':'Right upper abdomen','l-abd-l':'Left lower abdomen','r-abd-l':'Right lower abdomen','l-thigh':'Left thigh','r-thigh':'Right thigh'}
+    zh:{'l-arm':'左上臂','r-arm':'右上臂','l-abd-u':'左上腹','r-abd-u':'右上腹','c-abd-u':'上腹中間','l-abd-m':'肚臍左側','r-abd-m':'肚臍右側',
+        'l-abd-l':'左下腹','r-abd-l':'右下腹','c-abd-l':'下腹中間','l-thigh':'左大腿','r-thigh':'右大腿'},
+    en:{'l-arm':'Left upper arm','r-arm':'Right upper arm','l-abd-u':'Left upper abdomen','r-abd-u':'Right upper abdomen','c-abd-u':'Upper abdomen, centre',
+        'l-abd-m':'Left of navel','r-abd-m':'Right of navel','l-abd-l':'Left lower abdomen','r-abd-l':'Right lower abdomen','c-abd-l':'Lower abdomen, centre',
+        'l-thigh':'Left thigh','r-thigh':'Right thigh'}
   };
+  // Medicines and their standard pen strengths (mg). Anything else is entered as 自訂.
+  var MEDS = { mounjaro:[2.5,5,7.5,10,12.5,15], wegovy:[0.25,0.5,1,1.7,2.4] };
+  var MED_LABELS = { zh:{mounjaro:'猛健樂', wegovy:'週纖達'}, en:{mounjaro:'Mounjaro', wegovy:'Wegovy'} };
   var DOW = { zh:['日','一','二','三','四','五','六'], en:['S','M','T','W','T','F','S'] };
   var MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var todayISO = new Date().toISOString().slice(0,10);
@@ -41,7 +57,8 @@
     profile: null,
     weights: [],
     injections: [],
-    meals: []   // added 2026-10: diet log; older saves simply have none
+    meals: [],   // added 2026-10: diet log; older saves simply have none
+    purchases: [] // added 2026-10: 帳本 {id,date,medication,items:[{doseMg,qty}],price,place}
   };
   var LS_KEY = 'zhenyaozhi.records.v1';
   var persistMode = 'memory'; // 'local' | 'memory'
@@ -84,7 +101,7 @@
   function writeLocalStorage(){
     if (persistMode!=='local') return false;
     try{
-      localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals}));
+      localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases}));
       return true;
     }catch(e){ return false; }
   }
@@ -103,6 +120,7 @@
       mem.weights = saved.weights;
       mem.injections = saved.injections;
       mem.meals = Array.isArray(saved.meals) ? saved.meals : [];
+      mem.purchases = Array.isArray(saved.purchases) ? saved.purchases : [];
     } else {
       var seed = seedDemoData();
       mem.profile = defaultProfile();
@@ -122,9 +140,11 @@
     }catch(e){ sampleCap = null; sampleImgLimits = null; }
   }
 
+  function byDateTime(a,b){ return a.date.localeCompare(b.date) || String(a.time||'').localeCompare(String(b.time||'')); }
   function sortData(){
-    mem.weights.sort(function(a,b){ return a.date.localeCompare(b.date); });
-    mem.injections.sort(function(a,b){ return a.date.localeCompare(b.date); });
+    mem.weights.sort(byDateTime);
+    mem.injections.sort(byDateTime);
+    mem.purchases.sort(function(a,b){ return a.date.localeCompare(b.date); });
   }
 
   async function saveProfile(patch){
@@ -149,8 +169,17 @@
     mem.injections = mem.injections.filter(function(r){ return r.id!==id; });
     writeLocalStorage();
   }
+  function addPurchase(rec){
+    rec.id = uuid();
+    mem.purchases.push(rec); sortData();
+    writeLocalStorage();
+  }
+  function deletePurchase(id){
+    mem.purchases = mem.purchases.filter(function(r){ return r.id!==id; });
+    writeLocalStorage();
+  }
   async function clearAllData(){
-    mem.weights = []; mem.injections = []; mem.meals = [];
+    mem.weights = []; mem.injections = []; mem.meals = []; mem.purchases = [];
     writeLocalStorage();
   }
   async function restoreFromBackup(obj){
@@ -159,6 +188,7 @@
     mem.injections = obj.injections.map(function(r){ return Object.assign({}, r, {id:r.id||uuid()}); });
     // Backups made before the diet page have no meals: keep what is on this phone instead of wiping it.
     if (Array.isArray(obj.meals)) mem.meals = obj.meals.map(function(m){ return Object.assign({}, m, {id:m.id||uuid()}); });
+    if (Array.isArray(obj.purchases)) mem.purchases = obj.purchases.map(function(m){ return Object.assign({}, m, {id:m.id||uuid()}); });
     sortData();
     writeLocalStorage();
   }
@@ -166,7 +196,7 @@
   /* ---------- backup / restore (export file or text, re-import) ---------- */
   function buildBackupObject(){
     return {app:'zhenyaozhi', version:1, exportedAt:new Date().toISOString(),
-      profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals};
+      profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases};
   }
   function backupJSONText(){ return JSON.stringify(buildBackupObject(), null, 2); }
   function parseBackupText(text){
@@ -337,13 +367,54 @@
     var arr = mem.injections.slice(-n).reverse();
     return arr.map(function(r){ return r.site; });
   }
-  function recommendedSite(){
-    var used = recentSites(3);
-    for (var i=0;i<SITES.length;i++){
-      if (used.indexOf(SITES[i].id) === -1) return SITES[i].id;
-    }
-    return SITES[0].id;
+  function siteById(id){ for (var i=0;i<SITES.length;i++){ if (SITES[i].id===id) return SITES[i]; } return null; }
+  function regionOf(id){ var s = siteById(id); return s ? s.r : 'abd'; }
+  // Suggest the least recently used site in a region (default: the region of the last shot).
+  function recommendedSite(region){
+    var li = latestInjection();
+    region = region || (li ? regionOf(li.site) : 'abd');
+    var last = {};
+    mem.injections.forEach(function(r, i){ last[r.site] = i; });
+    var best = null, bestIdx = Infinity;
+    ROTATION.forEach(function(id){
+      if (regionOf(id)!==region) return;
+      var idx = last[id]==null ? -1 : last[id];
+      if (idx < bestIdx){ best = id; bestIdx = idx; }
+    });
+    return best || ROTATION[0];
   }
+
+  /* ---------- medicine + money helpers ---------- */
+  function medLabel(k){ return (MED_LABELS[LANG] && MED_LABELS[LANG][k]) || MED_LABELS.zh[k] || ''; }
+  function medKeyFromText(s){
+    s = String(s||'').toLowerCase();
+    if (/猛健|tirzep|mounjaro|zepbound/.test(s)) return 'mounjaro';
+    if (/週纖|司美|semaglut|wegovy|ozempic|胰妥/.test(s)) return 'wegovy';
+    return null;
+  }
+  function defaultMed(){
+    for (var i=mem.injections.length-1;i>=0;i--){ if (MEDS[mem.injections[i].medication]) return mem.injections[i].medication; }
+    return medKeyFromText(mem.profile.medication) || 'mounjaro';
+  }
+  function lastDoseFor(med){
+    for (var i=mem.injections.length-1;i>=0;i--){
+      var r = mem.injections[i];
+      if ((r.medication || medKeyFromText(mem.profile.medication)) === med) return +r.doseMg;
+    }
+    return null;
+  }
+  function money(n){ return '$' + Math.round(n).toLocaleString('en-US'); }
+  function purchaseQty(p){ return (p.items||[]).reduce(function(a,it){ return a + (+it.qty||0); }, 0); }
+  // Ledger entries win; the old single 累計花費 number from 設定 is used until the first purchase is logged.
+  function spendTotal(){
+    if (mem.purchases.length) return mem.purchases.reduce(function(a,p){ return a + (+p.price||0); }, 0);
+    return +mem.profile.totalSpend || 0;
+  }
+  function kgLost(){
+    var lw = latestWeight();
+    return mem.profile.startWeight - (lw ? lw.weightKg : mem.profile.startWeight);
+  }
+  function nowHM(){ var d = new Date(); return pad2(d.getHours())+':'+pad2(d.getMinutes()); }
 
   /* ---------- chart ---------- */
   var chartSeq = 0;
@@ -418,14 +489,72 @@
       var fill = 'var(--surface)', stroke = 'var(--ink-faint)', op = '1';
       if (s.id===used1){ fill = 'var(--accent-deep)'; stroke = 'none'; }
       else if (used2.indexOf(s.id)!==-1){ fill = 'var(--accent)'; stroke = 'none'; op = '0.5'; }
-      if (s.id===rec) ring = '<circle cx="'+s.x+'" cy="'+s.y+'" r="8.2" fill="none" stroke="var(--accent-deep)" stroke-width="1.4" stroke-dasharray="2.4 2.2"/>';
-      return ring + '<circle cx="'+s.x+'" cy="'+s.y+'" r="5.2" fill="'+fill+'" fill-opacity="'+op+'" stroke="'+stroke+'" stroke-width="1.3"/>';
-    }).join('');
+      if (s.id===rec) ring = '<circle cx="'+s.x+'" cy="'+s.y+'" r="6.8" fill="none" stroke="var(--accent-deep)" stroke-width="1.3" stroke-dasharray="2.2 2"/>';
+      return ring + '<circle cx="'+s.x+'" cy="'+s.y+'" r="4.3" fill="'+fill+'" fill-opacity="'+op+'" stroke="'+stroke+'" stroke-width="1.2"/>';
+    }).join('') + '<circle cx="63" cy="64.5" r="1.6" fill="var(--ink-faint)"/>';
     return '<svg viewBox="0 0 126 152" aria-hidden="true">' +
       '<circle cx="63" cy="13" r="10" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>' +
       '<path d="M40 26 Q63 20 86 26 L108 36 L104 47 L89 39 L91 62 Q94 96 88 140 L72 140 L68 92 L58 92 L54 140 L38 140 Q32 96 35 62 L37 39 L22 47 L18 36 Z" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2" stroke-linejoin="round"/>' +
       dots +
       '</svg>';
+  }
+
+  // Larger figure for one region, used in the log sheet. Tapping a dot picks the site.
+  function regionFigure(region, selected){
+    var used = recentSites(3), rec = recommendedSite(region);
+    var shape = '', side = 'font-size="15" font-weight="700" fill="var(--ink-faint)"';
+    var R = LANG==='en' ? 'R' : '右', Lf = LANG==='en' ? 'L' : '左';
+    if (region==='abd'){
+      shape = '<path d="M46 4 C40 70 34 140 50 216 L250 216 C266 140 260 70 254 4 Z" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/>' +
+        '<ellipse cx="150" cy="112" rx="3.5" ry="5" fill="var(--ink-faint)"/>' +
+        '<circle cx="150" cy="112" r="34" fill="none" stroke="var(--ink-faint)" stroke-width="1.2" stroke-dasharray="3 5" opacity=".7"/>' +
+        '<text x="22" y="117" text-anchor="middle" '+side+'>'+R+'</text><text x="278" y="117" text-anchor="middle" '+side+'>'+Lf+'</text>';
+    } else if (region==='arm'){
+      shape = '<path d="M122 0 L178 0 L182 216 L118 216 Z" fill="var(--surface-2)" opacity=".55"/>' +
+        '<rect x="40" y="6" width="60" height="204" rx="30" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/>' +
+        '<rect x="200" y="6" width="60" height="204" rx="30" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2"/>' +
+        '<text x="70" y="160" text-anchor="middle" '+side+'>'+R+'</text><text x="230" y="160" text-anchor="middle" '+side+'>'+Lf+'</text>';
+    } else {
+      shape = '<path d="M58 6 Q100 -2 146 6 L136 214 L76 214 Z" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2" stroke-linejoin="round"/>' +
+        '<path d="M154 6 Q200 -2 242 6 L224 214 L164 214 Z" fill="var(--surface-2)" stroke="var(--line)" stroke-width="2" stroke-linejoin="round"/>' +
+        '<text x="104" y="160" text-anchor="middle" '+side+'>'+R+'</text><text x="196" y="160" text-anchor="middle" '+side+'>'+Lf+'</text>';
+    }
+    var dots = SITES.filter(function(s){ return s.r===region; }).map(function(s){
+      var on = s.id===selected, u = used.indexOf(s.id);
+      var fill = on ? 'var(--accent-deep)' : (u!==-1 ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'var(--surface)');
+      var stroke = on ? 'var(--accent-deep)' : (u!==-1 ? 'var(--accent)' : 'var(--ink-faint)');
+      return '<g class="site-dot'+(on?' on':'')+'" data-site="'+s.id+'" role="button" tabindex="0" aria-label="'+esc(siteLabel(s.id))+'">' +
+        '<circle cx="'+s.bx+'" cy="'+s.by+'" r="26" fill="transparent"/>' +
+        (s.id===rec && !on ? '<circle cx="'+s.bx+'" cy="'+s.by+'" r="23" fill="none" stroke="var(--accent-deep)" stroke-width="1.6" stroke-dasharray="3 3"/>' : '') +
+        '<circle cx="'+s.bx+'" cy="'+s.by+'" r="16" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2"/>' +
+        (on ? '<path d="M'+(s.bx-6)+' '+s.by+' l4 4.5 l8 -9" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' :
+          (u!==-1 ? '<text x="'+s.bx+'" y="'+(s.by+5)+'" text-anchor="middle" font-size="13" font-weight="800" fill="var(--accent-deep)">'+(u+1)+'</text>' : '')) +
+        '</g>';
+    }).join('');
+    return '<svg class="region-fig" viewBox="0 0 300 220" role="group">'+shape+dots+'</svg>';
+  }
+
+  // Swipe-right-to-save control. Keyboard: Enter / Space.
+  function slideToSave(el, onDone){
+    var knob = el.querySelector('.ss-knob'), fill = el.querySelector('.ss-fill');
+    var startX = 0, x = 0, dragging = false;
+    function max(){ return el.clientWidth - knob.offsetWidth - 8; }
+    function set(v, anim){
+      x = Math.max(0, Math.min(max(), v));
+      knob.style.transition = fill.style.transition = anim ? 'transform .2s ease, width .2s ease' : 'none';
+      knob.style.transform = 'translateX('+x+'px)';
+      fill.style.width = x>0 ? (x + knob.offsetWidth + 8) + 'px' : '0';
+    }
+    function finish(){
+      if (x >= max()*0.82){ set(max(), true); if (onDone() === false) setTimeout(function(){ set(0, true); }, 260); }
+      else set(0, true);
+    }
+    knob.addEventListener('pointerdown', function(e){ dragging = true; startX = e.clientX - x; knob.setPointerCapture(e.pointerId); e.preventDefault(); });
+    knob.addEventListener('pointermove', function(e){ if (dragging) set(e.clientX - startX, false); });
+    knob.addEventListener('pointerup', function(){ if (!dragging) return; dragging = false; finish(); });
+    knob.addEventListener('pointercancel', function(){ dragging = false; set(0, true); });
+    el.addEventListener('keydown', function(e){ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); set(max(), true); if (onDone() === false) setTimeout(function(){ set(0, true); }, 260); } });
+    set(0, false);
   }
 
   /* ---------- calendar ---------- */
@@ -475,14 +604,6 @@
     edit:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     down:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 9v8H9"/></svg>'
   };
-  function exportShortcut(btn){
-    exportBackupFile().then(function(res){
-      btn.setAttribute('aria-label', !res.ok ? L('msg_exportFailed') : (res.mode==='file' ? L('msg_exportedFile') : L('msg_exportedClipboard')));
-      btn.style.borderColor = res.ok ? 'var(--sage)' : 'var(--warn)';
-      setTimeout(function(){ btn.style.borderColor=''; }, 1600);
-    });
-  }
-
   function renderHome(){
     var lw = latestWeight();
     var curW = lw ? lw.weightKg : mem.profile.startWeight;
@@ -494,7 +615,8 @@
     var cd = daysBetween(todayISO, nd);
     var streak = mem.weights.length ? daysBetween(mem.weights[0].date, todayISO) : 0;
     var bmi = currentBMI();
-    var perKg = (lost>0.05 && mem.profile.totalSpend>0) ? (mem.profile.totalSpend/lost) : null;
+    var spent = spendTotal();
+    var perKg = (lost>0.05 && spent>0) ? (spent/lost) : null;
     var chartPts = mem.weights.map(function(w){ return {date:w.date, value:w.weightKg}; }).slice(-30);
 
     var banner = (mem.profile.seeded && !demoBannerDismissed) ?
@@ -519,19 +641,20 @@
       '<div class="action-row">' +
         '<button class="btn" id="quickShot">'+ICON.syringe+esc(L('home_quickShot').replace('＋ ',''))+'</button>' +
         '<button class="btn primary" id="quickWeight">'+ICON.plus+esc(L('home_quickWeight').replace('＋ ',''))+'</button>' +
-        '<button class="btn icon-only" id="quickExport" aria-label="'+esc(L('btn_export'))+'">'+ICON.share+'</button>' +
+        '<button class="btn icon-only" id="quickShare" aria-label="'+esc(L('share_title'))+'">'+ICON.share+'</button>' +
       '</div>' +
       '<div class="stat-row">' +
         '<div class="stat-tile"><div class="label">'+esc(L('streak_label'))+'</div><div class="value teal">'+streak+'<small>'+esc(L('days_unit'))+'</small></div></div>' +
         '<div class="stat-tile"><div class="label">'+esc(L('bmi_label'))+'</div><div class="value accent">'+(bmi?bmi.toFixed(1):'—')+'</div></div>' +
-        '<div class="stat-tile"><div class="label">'+esc(L('perkg_label'))+'</div><div class="value">'+(perKg!=null?('<small>$</small>'+Math.round(perKg)):'—')+'</div></div>' +
+        '<div class="stat-tile tappable" id="perKgTile" role="button" tabindex="0"><div class="label">'+esc(L('perkg_label'))+'</div><div class="value">'+(perKg!=null?('<small>$</small>'+Math.round(perKg).toLocaleString('en-US')):'—')+'</div></div>' +
       '</div>';
 
     var bn = document.getElementById('dismissBanner');
     if (bn) bn.onclick = function(){ demoBannerDismissed = true; renderHome(); };
     document.getElementById('quickShot').onclick = openInjectionForm;
     document.getElementById('quickWeight').onclick = openWeightForm;
-    document.getElementById('quickExport').onclick = function(){ exportShortcut(this); };
+    document.getElementById('quickShare').onclick = openShareSheet;
+    document.getElementById('perKgTile').onclick = function(){ switchView('ledger'); };
   }
 
   var weightRange = '3m';
@@ -556,19 +679,22 @@
     var dash = circumference*pct/100;
     var startDate = mem.weights.length ? mem.weights[0].date : mem.profile.startDate;
 
+    var hasWaist = mem.weights.some(function(w){ return w.waistCm!=null; });
+    var cols = hasWaist ? 9 : 8;
     var rows = '', lastMonth = '';
     mem.weights.slice().reverse().forEach(function(w){
       var m = w.date.slice(0,7);
-      if (m!==lastMonth){ lastMonth = m; rows += '<tr class="month"><td colspan="8">'+esc(monthHead(w.date))+'</td></tr>'; }
+      if (m!==lastMonth){ lastMonth = m; rows += '<tr class="month"><td colspan="'+cols+'">'+esc(monthHead(w.date))+'</td></tr>'; }
       rows += '<tr><td><b>'+(+w.date.slice(8,10))+'</b> '+esc(LANG==='en'?'':'日')+'</td><td class="num strong">'+fmtKg(w.weightKg)+'</td>' +
         '<td class="num">'+(w.fatPercent!=null?fmtKg(w.fatPercent):'—')+'</td>' +
         '<td class="num">'+(w.fatKg!=null?fmtKg(w.fatKg):'—')+'</td>' +
         '<td class="num">'+(w.muscleKg!=null?fmtKg(w.muscleKg):'—')+'</td>' +
         '<td class="num">'+(w.visceralFat!=null?w.visceralFat:'—')+'</td>' +
         '<td class="num">'+(w.score!=null?w.score:'—')+'</td>' +
+        (hasWaist ? '<td class="num">'+(w.waistCm!=null?fmtKg(w.waistCm):'—')+'</td>' : '') +
         '<td class="row-actions"><button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-weight="'+w.id+'">'+ICON.trash+'</button></td></tr>';
     });
-    if (!rows) rows = '<tr class="empty-row"><td colspan="8">'+esc(L('empty_weight'))+'</td></tr>';
+    if (!rows) rows = '<tr class="empty-row"><td colspan="'+cols+'">'+esc(L('empty_weight'))+'</td></tr>';
 
     document.getElementById('view-weight').innerHTML =
       '<div class="seg" id="rangeSeg">' +
@@ -597,15 +723,15 @@
       '</div>' +
       '<div class="action-row">' +
         '<button class="btn primary" id="addWeightBtn">'+ICON.plus+esc(L('weight_addBtn').replace('＋ ',''))+'</button>' +
-        '<button class="btn icon-only" id="weightExport" aria-label="'+esc(L('btn_export'))+'">'+ICON.share+'</button>' +
+        '<button class="btn icon-only" id="weightShare" aria-label="'+esc(L('share_title'))+'">'+ICON.share+'</button>' +
       '</div>' +
       '<div class="card">' +
         '<div class="card-head"><h2>'+esc(L('weight_recordsTitle',{n:''}).trim())+' <span class="muted num">'+mem.weights.length+'</span></h2></div>' +
-        '<div class="table-scroll"><table class="rec"><thead><tr><th>'+esc(L('th_date'))+'</th><th>'+esc(L('th_weight'))+'kg</th><th>'+esc(L('th_fatPercent'))+'</th><th>'+esc(L('th_fat'))+'kg</th><th>'+esc(L('th_muscle'))+'kg</th><th>'+esc(L('th_visceral'))+'</th><th>'+esc(L('th_score'))+'</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>' +
+        '<div class="table-scroll"><table class="rec"><thead><tr><th>'+esc(L('th_date'))+'</th><th>'+esc(L('th_weight'))+'kg</th><th>'+esc(L('th_fatPercent'))+'</th><th>'+esc(L('th_fat'))+'kg</th><th>'+esc(L('th_muscle'))+'kg</th><th>'+esc(L('th_visceral'))+'</th><th>'+esc(L('th_score'))+'</th>'+(hasWaist?'<th>'+esc(L('th_waist'))+'</th>':'')+'<th></th></tr></thead><tbody>'+rows+'</tbody></table></div>' +
       '</div>';
 
     document.getElementById('addWeightBtn').onclick = openWeightForm;
-    document.getElementById('weightExport').onclick = function(){ exportShortcut(this); };
+    document.getElementById('weightShare').onclick = openShareSheet;
     document.querySelectorAll('#rangeSeg button').forEach(function(b){
       b.onclick = function(){ weightRange = this.getAttribute('data-range'); renderWeight(); };
     });
@@ -626,8 +752,8 @@
       var m = r.date.slice(0,7);
       if (m!==lastMonth){ lastMonth = m; items += '<li class="month">'+esc(monthHead(r.date))+'</li>'; }
       items += '<li class="shot-item"><div class="idx">'+(n-i)+'</div>' +
-        '<div><div class="site">'+esc(siteLabel(r.site))+'</div><div class="when">'+esc(fmtYMD(r.date).replace(/^\d+年/,''))+esc(L('dow_paren',{d:dowOf(r.date)}))+'</div></div>' +
-        '<div class="dose">'+fmtDose(r.doseMg)+'<small>mg</small></div>' +
+        '<div><div class="site">'+esc(siteLabel(r.site))+'</div><div class="when">'+esc(fmtYMD(r.date).replace(/^\d+年/,''))+esc(L('dow_paren',{d:dowOf(r.date)}))+(r.time?' '+esc(r.time):'')+'</div></div>' +
+        '<div class="dose">'+fmtDose(r.doseMg)+'<small>mg</small>'+(r.medication?'<em>'+esc(medLabel(r.medication))+'</em>':'')+'</div>' +
         '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-shot="'+r.id+'">'+ICON.trash+'</button></li>';
     });
     if (!items) items = '<li class="empty">'+esc(L('empty_shot'))+'</li>';
@@ -710,8 +836,9 @@
         '<div class="field"><label>'+esc(L('settings_medication'))+'</label><input id="f-med" type="text" value="'+esc(p.medication)+'"></div>' +
         '<div class="field-row">' +
           '<div class="field"><label>'+esc(L('settings_interval'))+'</label><input id="f-interval" type="number" inputmode="numeric" value="'+p.intervalDays+'"></div>' +
-          '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="number" inputmode="decimal" value="'+p.totalSpend+'"></div>' +
+          '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="number" inputmode="decimal" value="'+p.totalSpend+'"'+(mem.purchases.length?' disabled':'')+'></div>' +
         '</div>' +
+        (mem.purchases.length ? '<div class="note" style="margin:-6px 0 8px">'+esc(L('settings_spendLedger'))+'</div>' : '') +
         '<div class="toggle">' +
           '<div><div class="t-label">'+esc(L('settings_reminder'))+'</div><div class="t-sub">'+esc(L('settings_reminderNote'))+'</div></div>' +
           '<div class="switch'+(p.remindersOn?' on':'')+'" id="remindToggle"><i></i></div>' +
@@ -777,7 +904,7 @@
       saveProfile({remindersOn: !mem.profile.remindersOn}).then(renderSettings);
     };
 
-    function refreshAll(){ renderHome(); renderWeight(); renderShot(); }
+    function refreshAll(){ renderHome(); renderWeight(); renderShot(); renderLedger(); }
 
     document.getElementById('exportFileBtn').onclick = function(){
       var btn = this, orig = btn.textContent;
@@ -878,52 +1005,104 @@
 
   function openWeightForm(){
     var aiAvailable = !!(sampleCap && sampleImgLimits && sampleImgLimits.images);
+    var fatUnit = mem.profile.fatUnit==='pct' ? 'pct' : 'kg';
+    var muscleUnit = mem.profile.muscleUnit==='pct' ? 'pct' : 'kg';
+    // Custom items the user tracked last time come back as empty rows, so repeat entries are one tap.
+    var lastCustom = [];
+    for (var i=mem.weights.length-1;i>=0;i--){ if (Array.isArray(mem.weights[i].custom) && mem.weights[i].custom.length){ lastCustom = mem.weights[i].custom; break; } }
+
+    function unitSeg(id, unit){
+      return '<div class="mini-seg" id="'+id+'"><button type="button" data-u="kg" class="'+(unit==='kg'?'active':'')+'">kg</button><button type="button" data-u="pct" class="'+(unit==='pct'?'active':'')+'">%</button></div>';
+    }
+    function customRow(name){
+      return '<div class="custom-row"><input class="cr-name" placeholder="'+esc(L('wf_customName'))+'" value="'+esc(name||'')+'">' +
+        '<input class="cr-val" type="number" inputmode="decimal" step="0.1" placeholder="'+esc(L('wf_customVal'))+'">' +
+        '<button type="button" class="icon-btn cr-del" aria-label="'+esc(L('a11y_delete'))+'">✕</button></div>';
+    }
+
     sheetBody.innerHTML =
-      '<div class="sheet-head"><h3>'+esc(L('wf_title'))+'</h3><button id="closeSheet">✕</button></div>' +
+      sheetHead(L('wf_title')) +
       (aiAvailable ?
         '<input type="file" id="wf-ai-input" accept="'+esc((sampleImgLimits.images.mediaTypes||['image/*']).join(','))+'" hidden>' +
-        '<button class="btn ghost block" id="wf-ai-btn" type="button">' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="14" r="3.5"/></svg> ' +
-          esc(L('wf_aiImportBtn')) +
-        '</button>' +
+        '<button class="btn ghost block" id="wf-ai-btn" type="button">'+ICON.camera+' '+esc(L('wf_aiImportBtn'))+'</button>' +
         '<div class="note" id="wf-ai-msg" style="margin:8px 0 4px;min-height:14px"></div>'
       : '') +
-      '<div class="field"><label>'+esc(L('wf_date'))+'</label><input type="date" id="wf-date" value="'+todayISO+'"></div>' +
-      '<div class="field-row">' +
-        '<div class="field"><label>'+esc(L('wf_weight'))+'</label><input type="number" inputmode="decimal" id="wf-weight" step="0.1" placeholder="'+esc(L('wf_weightPh'))+'"></div>' +
-        '<div class="field"><label>'+esc(L('wf_fatPercent'))+'</label><input type="number" inputmode="decimal" id="wf-fatpct" step="0.1"></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('sf_when'))+'</div>' +
+        '<div class="dt-row"><input type="date" id="wf-date" value="'+todayISO+'"><input type="time" id="wf-time" value="'+nowHM()+'"></div></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('wf_weightLabel'))+'<b class="req">*</b></div>' +
+        '<div class="unit-input big"><input type="number" inputmode="decimal" id="wf-weight" step="0.1" placeholder="'+esc(L('wf_weightPh'))+'"><span>kg</span></div></div>' +
+      '<div class="fcard-row">' +
+        '<div class="fcard"><div class="fc-title">'+esc(L('wf_fatMass'))+unitSeg('wf-fat-unit', fatUnit)+'</div>' +
+          '<div class="unit-input"><input type="number" inputmode="decimal" id="wf-fat" step="0.1" placeholder="—"><span id="wf-fat-u">'+(fatUnit==='kg'?'kg':'%')+'</span></div></div>' +
+        '<div class="fcard"><div class="fc-title">'+esc(L('wf_muscleMass'))+unitSeg('wf-muscle-unit', muscleUnit)+'</div>' +
+          '<div class="unit-input"><input type="number" inputmode="decimal" id="wf-muscle" step="0.1" placeholder="—"><span id="wf-muscle-u">'+(muscleUnit==='kg'?'kg':'%')+'</span></div></div>' +
       '</div>' +
-      '<button class="btn ghost small" id="wf-inbody-toggle" type="button" style="margin-bottom:12px">'+esc(L('wf_inbodyToggle'))+' ▾</button>' +
-      '<div id="wf-inbody-fields" hidden>' +
-        '<div class="field-row">' +
-          '<div class="field"><label>'+esc(L('wf_fat'))+'</label><input type="number" inputmode="decimal" id="wf-fat" step="0.1"></div>' +
-          '<div class="field"><label>'+esc(L('wf_muscle'))+'</label><input type="number" inputmode="decimal" id="wf-muscle" step="0.1"></div>' +
-        '</div>' +
-        '<div class="field-row">' +
-          '<div class="field"><label>'+esc(L('wf_visceralFat'))+'</label><input type="number" inputmode="numeric" id="wf-visceral" step="1"></div>' +
-          '<div class="field"><label>'+esc(L('wf_score'))+'</label><input type="number" inputmode="numeric" id="wf-score" step="1"></div>' +
+      '<button class="more-btn" id="wf-more" type="button" aria-expanded="false">'+esc(L('wf_more'))+' <span>▾</span></button>' +
+      '<div id="wf-more-box" hidden>' +
+        '<div class="fcard">' +
+          '<div class="field-row">' +
+            '<div class="field"><label>'+esc(L('wf_visceralFat'))+'</label><input type="number" inputmode="decimal" id="wf-visceral" step="1"></div>' +
+            '<div class="field"><label>'+esc(L('wf_waist'))+'</label><input type="number" inputmode="decimal" id="wf-waist" step="0.1"></div>' +
+          '</div>' +
+          '<div class="field-row">' +
+            '<div class="field"><label>'+esc(L('wf_lean'))+'</label><input type="number" inputmode="decimal" id="wf-lean" step="0.1"></div>' +
+            '<div class="field"><label>'+esc(L('wf_score'))+'</label><input type="number" inputmode="numeric" id="wf-score" step="1"></div>' +
+          '</div>' +
+          '<div id="wf-custom">'+lastCustom.map(function(c){ return customRow(c.name); }).join('')+'</div>' +
+          '<button class="link-btn" id="wf-add-custom" type="button">＋ '+esc(L('wf_addCustom'))+'</button>' +
         '</div>' +
       '</div>' +
-      '<button class="btn primary block" id="wf-save">'+esc(L('wf_save'))+'</button>';
+      '<div class="note" id="wf-msg" style="min-height:14px;color:var(--warn)"></div>' +
+      '<div class="sheet-foot two"><button class="btn" id="wf-cancel" type="button">'+esc(L('btn_cancel'))+'</button><button class="btn primary" id="wf-save" type="button">'+esc(L('btn_save'))+'</button></div>';
     overlay.classList.add('open');
+    sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
+    document.getElementById('wf-cancel').onclick = closeSheet;
 
-    document.getElementById('wf-inbody-toggle').onclick = function(){
-      var box = document.getElementById('wf-inbody-fields');
-      box.hidden = !box.hidden;
+    function bindUnit(segId, labelId, set){
+      document.querySelectorAll('#'+segId+' button').forEach(function(b){
+        b.onclick = function(){
+          var u = this.getAttribute('data-u'); set(u);
+          document.querySelectorAll('#'+segId+' button').forEach(function(x){ x.classList.toggle('active', x===b); });
+          document.getElementById(labelId).textContent = u==='kg' ? 'kg' : '%';
+        };
+      });
+    }
+    bindUnit('wf-fat-unit', 'wf-fat-u', function(u){ fatUnit = u; });
+    bindUnit('wf-muscle-unit', 'wf-muscle-u', function(u){ muscleUnit = u; });
+
+    function openMore(){
+      document.getElementById('wf-more-box').hidden = false;
+      document.getElementById('wf-more').setAttribute('aria-expanded','true');
+      document.getElementById('wf-more').classList.add('open');
+    }
+    document.getElementById('wf-more').onclick = function(){
+      var box = document.getElementById('wf-more-box');
+      if (box.hidden) openMore();
+      else { box.hidden = true; this.setAttribute('aria-expanded','false'); this.classList.remove('open'); }
     };
+    function bindCustom(){
+      document.querySelectorAll('#wf-custom .cr-del').forEach(function(b){ b.onclick = function(){ this.parentNode.remove(); }; });
+    }
+    document.getElementById('wf-add-custom').onclick = function(){
+      document.getElementById('wf-custom').insertAdjacentHTML('beforeend', customRow(''));
+      bindCustom();
+      var rows = document.querySelectorAll('#wf-custom .cr-name'); rows[rows.length-1].focus();
+    };
+    bindCustom();
 
+    function setUnit(segId, labelId, u){
+      var b = document.querySelector('#'+segId+' [data-u="'+u+'"]'); if (b) b.click();
+    }
     function fillFromExtract(obj){
       if (obj.date) document.getElementById('wf-date').value = obj.date;
       if (obj.weightKg!=null) document.getElementById('wf-weight').value = obj.weightKg;
-      if (obj.fatPercent!=null) document.getElementById('wf-fatpct').value = obj.fatPercent;
-      if (obj.fatKg!=null) document.getElementById('wf-fat').value = obj.fatKg;
-      if (obj.muscleKg!=null) document.getElementById('wf-muscle').value = obj.muscleKg;
+      if (obj.fatKg!=null){ setUnit('wf-fat-unit','wf-fat-u','kg'); document.getElementById('wf-fat').value = obj.fatKg; }
+      else if (obj.fatPercent!=null){ setUnit('wf-fat-unit','wf-fat-u','pct'); document.getElementById('wf-fat').value = obj.fatPercent; }
+      if (obj.muscleKg!=null){ setUnit('wf-muscle-unit','wf-muscle-u','kg'); document.getElementById('wf-muscle').value = obj.muscleKg; }
       if (obj.visceralFat!=null) document.getElementById('wf-visceral').value = obj.visceralFat;
       if (obj.score!=null) document.getElementById('wf-score').value = obj.score;
-      if (obj.fatKg!=null || obj.muscleKg!=null || obj.visceralFat!=null || obj.score!=null){
-        document.getElementById('wf-inbody-fields').hidden = false;
-      }
+      if (obj.visceralFat!=null || obj.score!=null) openMore();
     }
 
     if (aiAvailable){
@@ -962,51 +1141,414 @@
 
     document.getElementById('wf-save').onclick = function(){
       var v = +document.getElementById('wf-weight').value;
-      if (!v){ document.getElementById('wf-weight').focus(); return; }
-      function numOrNull(id){ var el = document.getElementById(id); return el.value ? +el.value : null; }
+      if (!(v>0)){ document.getElementById('wf-msg').textContent = L('wf_needWeight'); document.getElementById('wf-weight').focus(); return; }
+      function numOrNull(id){ var el = document.getElementById(id); return el.value!=='' && isFinite(+el.value) ? +el.value : null; }
+      function r1(n){ return Math.round(n*10)/10; }
+      var fat = numOrNull('wf-fat'), muscle = numOrNull('wf-muscle');
+      var custom = [];
+      document.querySelectorAll('#wf-custom .custom-row').forEach(function(row){
+        var name = row.querySelector('.cr-name').value.trim(), val = row.querySelector('.cr-val').value;
+        if (name && val!=='' && isFinite(+val)) custom.push({name:name.slice(0,20), value:+val});
+      });
       var rec = {
         date: document.getElementById('wf-date').value || todayISO,
+        time: document.getElementById('wf-time').value || '',
         weightKg: v,
-        fatPercent: numOrNull('wf-fatpct'),
-        fatKg: numOrNull('wf-fat'),
-        muscleKg: numOrNull('wf-muscle'),
+        // Both kg and % are kept so the table and charts work whichever one was typed.
+        fatKg: fat==null ? null : (fatUnit==='kg' ? fat : r1(v*fat/100)),
+        fatPercent: fat==null ? null : (fatUnit==='pct' ? fat : r1(fat/v*100)),
+        muscleKg: muscle==null ? null : (muscleUnit==='kg' ? muscle : r1(v*muscle/100)),
+        musclePercent: muscle==null ? null : (muscleUnit==='pct' ? muscle : r1(muscle/v*100)),
         visceralFat: numOrNull('wf-visceral'),
+        waistCm: numOrNull('wf-waist'),
+        leanKg: numOrNull('wf-lean'),
         score: numOrNull('wf-score')
       };
+      if (custom.length) rec.custom = custom;
+      mem.profile.fatUnit = fatUnit; mem.profile.muscleUnit = muscleUnit;
       addWeight(rec).then(function(){
         closeSheet(); renderHome(); renderWeight(); updateDayBadge();
       });
     };
   }
 
+  function medSeg(id, med){
+    return '<div class="seg med-seg" id="'+id+'">' + Object.keys(MEDS).map(function(k){
+      return '<button type="button" data-med="'+k+'" class="'+(k===med?'active':'')+'">'+esc(medLabel(k))+'</button>';
+    }).join('') + '</div>';
+  }
+  function sheetHead(title, extra){
+    return '<div class="sheet-head"><h3>'+esc(title)+'</h3><button id="closeSheet" type="button" aria-label="close">✕</button>' +
+      (extra ? '<div class="head-extra">'+extra+'</div>' : '') + '</div>';
+  }
+
   function openInjectionForm(){
-    var rec = recommendedSite();
+    var med = defaultMed();
+    var li = latestInjection();
+    var region = li ? regionOf(li.site) : 'abd';
+    var site = recommendedSite(region);
+    var dose = lastDoseFor(med);
+    var custom = dose!=null && MEDS[med].indexOf(dose)===-1;
+
     sheetBody.innerHTML =
-      '<div class="sheet-head"><h3>'+esc(L('sf_title'))+'</h3><button id="closeSheet">✕</button></div>' +
-      '<div class="field"><label>'+esc(L('sf_date'))+'</label><input type="date" id="sf-date" value="'+todayISO+'"></div>' +
-      '<div class="field-row">' +
-        '<div class="field"><label>'+esc(L('sf_dose'))+'</label><input type="number" inputmode="decimal" id="sf-dose" step="0.05" placeholder="'+esc(L('sf_dosePh'))+'"></div>' +
-        '<div class="field"><label>'+esc(L('sf_site'))+'</label><select id="sf-site">' +
-          SITES.map(function(s){ return '<option value="'+s.id+'"'+(s.id===rec?' selected':'')+'>'+esc(siteLabel(s.id))+(s.id===rec?esc(L('sf_recommended')):'')+'</option>'; }).join('') +
-        '</select></div>' +
-      '</div>' +
-      '<button class="btn primary block" id="sf-save">'+esc(L('sf_save'))+'</button>';
+      sheetHead(L('sf_title'), medSeg('sf-med', med)) +
+      '<div class="fcard"><div class="fc-title">'+esc(L('sf_when'))+'</div>' +
+        '<div class="dt-row"><input type="date" id="sf-date" value="'+todayISO+'"><input type="time" id="sf-time" value="'+nowHM()+'"></div></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('sf_dose'))+'<span class="fc-aside" id="sf-med-name"></span></div>' +
+        '<div class="chip-grid" id="sf-doses"></div>' +
+        '<div class="unit-input" id="sf-custom-box" hidden><input type="number" inputmode="decimal" id="sf-dose" step="0.05" placeholder="'+esc(L('sf_dosePh'))+'"><span>mg</span></div></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('sf_site'))+'<span class="fc-aside site-name" id="sf-site-name"></span></div>' +
+        '<div class="seg" id="sf-region">'+REGIONS.map(function(r){ return '<button type="button" data-region="'+r+'">'+esc(L('region_'+r))+'</button>'; }).join('')+'</div>' +
+        '<div id="sf-fig"></div>' +
+        '<div class="fig-key"><span><i class="k-used"></i>'+esc(L('sf_keyUsed'))+'</span><span><i class="k-rec"></i>'+esc(L('sf_keyRec'))+'</span></div>' +
+        '<div class="note" id="sf-navel">'+esc(L('shot_navelNote'))+'</div></div>' +
+      '<div class="note" id="sf-msg" style="min-height:14px;color:var(--warn)"></div>' +
+      '<div class="sheet-foot"><div class="slide-save" id="sf-slide" tabindex="0" role="button" aria-label="'+esc(L('sf_slide'))+'">' +
+        '<div class="ss-fill"></div><span class="ss-text">'+esc(L('sf_slide'))+' ›››</span><div class="ss-knob">'+ICON.syringe+'</div></div></div>';
     overlay.classList.add('open');
+    sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
-    document.getElementById('sf-save').onclick = function(){
-      var dose = +document.getElementById('sf-dose').value;
-      if (!dose){ document.getElementById('sf-dose').focus(); return; }
-      var r = {
-        date: document.getElementById('sf-date').value || todayISO,
-        doseMg: dose,
-        site: document.getElementById('sf-site').value
+
+    function drawDoses(){
+      var list = MEDS[med];
+      document.getElementById('sf-doses').innerHTML = list.map(function(d){
+        return '<button type="button" class="chip'+(!custom && dose===d?' on':'')+'" data-dose="'+d+'">'+fmtDose(d)+'</button>';
+      }).join('') + '<button type="button" class="chip'+(custom?' on':'')+'" data-dose="custom">'+esc(L('sf_custom'))+'</button>';
+      document.getElementById('sf-custom-box').hidden = !custom;
+      if (custom && dose!=null) document.getElementById('sf-dose').value = fmtDose(dose);
+      document.getElementById('sf-med-name').textContent = medLabel(med);
+      document.querySelectorAll('#sf-doses [data-dose]').forEach(function(b){
+        b.onclick = function(){
+          var v = this.getAttribute('data-dose');
+          if (v==='custom'){ custom = true; drawDoses(); document.getElementById('sf-dose').focus(); }
+          else { custom = false; dose = +v; drawDoses(); }
+        };
+      });
+    }
+    function drawSite(){
+      document.querySelectorAll('#sf-region button').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-region')===region); });
+      document.getElementById('sf-fig').innerHTML = regionFigure(region, site);
+      document.getElementById('sf-site-name').textContent = site ? siteLabel(site) : '';
+      document.getElementById('sf-navel').hidden = region!=='abd';
+      document.querySelectorAll('#sf-fig [data-site]').forEach(function(g){
+        g.onclick = function(){ site = this.getAttribute('data-site'); drawSite(); };
+        g.onkeydown = function(e){ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); this.onclick(); } };
+      });
+    }
+    document.querySelectorAll('#sf-med button').forEach(function(b){
+      b.onclick = function(){
+        med = this.getAttribute('data-med');
+        document.querySelectorAll('#sf-med button').forEach(function(x){ x.classList.toggle('active', x.getAttribute('data-med')===med); });
+        dose = lastDoseFor(med); custom = dose!=null && MEDS[med].indexOf(dose)===-1;
+        drawDoses();
       };
-      addInjection(r).then(function(){
+    });
+    document.querySelectorAll('#sf-region button').forEach(function(b){
+      b.onclick = function(){
+        region = this.getAttribute('data-region');
+        if (regionOf(site)!==region) site = recommendedSite(region);
+        drawSite();
+      };
+    });
+    drawDoses(); drawSite();
+
+    slideToSave(document.getElementById('sf-slide'), function(){
+      var msgEl = document.getElementById('sf-msg');
+      var d = custom ? +document.getElementById('sf-dose').value : dose;
+      if (!(d>0)){ msgEl.textContent = L('sf_needDose'); if (custom) document.getElementById('sf-dose').focus(); return false; }
+      if (!site){ msgEl.textContent = L('sf_needSite'); return false; }
+      addInjection({
+        date: document.getElementById('sf-date').value || todayISO,
+        time: document.getElementById('sf-time').value || '',
+        medication: med,
+        doseMg: d,
+        site: site
+      }).then(function(){
         closeSheet(); renderHome(); renderShot(); setTitle(currentView);
       });
+    });
+  }
+
+
+  /* ---------- 帳本 (ledger) ---------- */
+  function purchaseDoseText(p){
+    return (p.items||[]).filter(function(it){ return +it.qty>0; }).map(function(it){ return fmtDose(+it.doseMg)+'mg×'+it.qty; }).join('、') || '—';
+  }
+  function renderLedger(){
+    var total = spendTotal();
+    var units = mem.purchases.reduce(function(a,p){ return a + purchaseQty(p); }, 0);
+    var month = todayISO.slice(0,7);
+    var monthSpend = mem.purchases.filter(function(p){ return p.date.slice(0,7)===month; }).reduce(function(a,p){ return a + (+p.price||0); }, 0);
+    var lost = kgLost();
+    var perKg = (lost>0.05 && total>0) ? total/lost : null;
+    var perShot = (mem.injections.length && total>0) ? total/mem.injections.length : null;
+    var first = mem.purchases.length ? mem.purchases[0].date : (mem.weights.length ? mem.weights[0].date : mem.profile.startDate);
+
+    var rows = '', lastMonth = '';
+    mem.purchases.slice().reverse().forEach(function(p){
+      var m = p.date.slice(0,7);
+      if (m!==lastMonth){ lastMonth = m; rows += '<li class="month">'+esc(monthHead(p.date))+'</li>'; }
+      rows += '<li class="buy-row"><div class="b-date num">'+esc(fmtMD(p.date))+'</div>' +
+        '<div class="b-dose"><small>'+esc(medLabel(p.medication))+'</small>'+esc(purchaseDoseText(p))+'</div>' +
+        '<div class="b-price num">'+money(+p.price||0)+'</div>' +
+        '<div class="b-place">'+esc(p.place||'—')+'</div>' +
+        '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-buy="'+p.id+'">'+ICON.trash+'</button></li>';
+    });
+    if (!rows) rows = '<li class="empty">'+esc(L('ledger_empty'))+'</li>';
+
+    document.getElementById('view-ledger').innerHTML =
+      '<div class="hero ledger-hero">' +
+        '<div class="eyebrow">'+esc(L('ledger_total'))+'</div>' +
+        '<div class="big">'+money(total).replace('$','<span class="cur">$</span>')+'</div>' +
+        '<div class="sub">'+esc(L('ledger_since',{d:fmtYMD(first)}))+'</div>' +
+        '<div class="lh-foot"><div class="lh-stat"><small>'+esc(L('ledger_units'))+'</small><b class="num">'+units+'</b>'+esc(L('ledger_unit'))+
+          (units ? '<em>'+esc(L('ledger_avg'))+' '+money(total/units)+'</em>' : '')+'</div>' +
+          '<button class="lh-btn" id="addBuyBtn" type="button">'+ICON.plus+esc(L('ledger_add'))+'</button></div>' +
+        (mem.purchases.length || !(+mem.profile.totalSpend) ? '' : '<div class="lh-note">'+esc(L('ledger_fromSettings'))+'</div>') +
+      '</div>' +
+      '<div class="stat-row">' +
+        '<div class="stat-tile"><div class="label">'+esc(L('ledger_month'))+'</div><div class="value">'+(monthSpend?('<small>$</small>'+Math.round(monthSpend).toLocaleString('en-US')):'—')+'</div></div>' +
+        '<div class="stat-tile"><div class="label">'+esc(L('ledger_perKg'))+'</div><div class="value teal">'+(perKg!=null?('<small>$</small>'+Math.round(perKg).toLocaleString('en-US')):'—')+'</div></div>' +
+        '<div class="stat-tile"><div class="label">'+esc(L('ledger_perShot'))+'</div><div class="value accent">'+(perShot!=null?('<small>$</small>'+Math.round(perShot).toLocaleString('en-US')):'—')+'</div></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<div class="card-head"><h2>'+esc(L('ledger_listTitle'))+' <span class="muted num">'+mem.purchases.length+'</span></h2></div>' +
+        '<div class="buy-head"><span>'+esc(L('th_date'))+'</span><span>'+esc(L('ledger_colDose'))+'</span><span>'+esc(L('ledger_colPrice'))+'</span><span>'+esc(L('ledger_colPlace'))+'</span><span></span></div>' +
+        '<ul class="buy-list">'+rows+'</ul>' +
+      '</div>' +
+      '<div class="note" style="padding:0 6px">'+esc(L('ledger_note'))+'</div>';
+
+    document.getElementById('addBuyBtn').onclick = openPurchaseForm;
+    document.querySelectorAll('[data-del-buy]').forEach(function(b){
+      b.onclick = function(){ deletePurchase(this.getAttribute('data-del-buy')); renderLedger(); };
+    });
+  }
+
+  function openPurchaseForm(){
+    var med = defaultMed();
+    var counts = {mounjaro:{}, wegovy:{}};      // per medicine: dose -> qty
+    var customDose = {mounjaro:'', wegovy:''}, customQty = {mounjaro:0, wegovy:0};
+    var places = [];
+    mem.purchases.slice().reverse().forEach(function(p){ if (p.place && places.indexOf(p.place)===-1) places.push(p.place); });
+
+    sheetBody.innerHTML =
+      sheetHead(L('ledger_add'), medSeg('pf-med', med)) +
+      '<div class="fcard"><div class="fc-title">'+esc(L('wf_date'))+'</div><div class="dt-row"><input type="date" id="pf-date" value="'+todayISO+'"></div></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('pf_doseQty'))+'<span class="fc-aside" id="pf-med-name"></span></div><div id="pf-rows"></div></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('pf_price'))+'<b class="req">*</b></div>' +
+        '<div class="unit-input big"><span class="pre">$</span><input type="number" inputmode="decimal" id="pf-price" step="1" placeholder="0"></div></div>' +
+      '<div class="fcard"><div class="fc-title">'+esc(L('pf_place'))+'</div>' +
+        '<div class="unit-input"><input type="text" id="pf-place" list="pf-places" maxlength="40" placeholder="'+esc(L('pf_placePh'))+'"></div>' +
+        '<datalist id="pf-places">'+places.map(function(p){ return '<option value="'+esc(p)+'">'; }).join('')+'</datalist></div>' +
+      '<div class="note" id="pf-msg" style="min-height:14px;color:var(--warn)"></div>' +
+      '<div class="sheet-foot two"><button class="btn" id="pf-cancel" type="button">'+esc(L('btn_cancel'))+'</button><button class="btn primary" id="pf-save" type="button">'+esc(L('btn_save'))+'</button></div>';
+    overlay.classList.add('open');
+    sheetBody.scrollTop = 0;
+    document.getElementById('closeSheet').onclick = closeSheet;
+    document.getElementById('pf-cancel').onclick = closeSheet;
+
+    function stepper(key, qty){
+      return '<div class="stepper"><button type="button" data-step="-1" data-key="'+key+'" aria-label="−"'+(qty?'':' disabled')+'>−</button>' +
+        '<b class="num">'+qty+'</b><button type="button" data-step="1" data-key="'+key+'" aria-label="+">+</button></div>';
+    }
+    function draw(){
+      var c = counts[med];
+      document.getElementById('pf-med-name').textContent = medLabel(med);
+      document.getElementById('pf-rows').innerHTML = MEDS[med].map(function(d){
+        var q = c[d]||0;
+        return '<div class="qty-row'+(q?' on':'')+'"><span class="num"><b>'+fmtDose(d)+'</b> mg</span>'+stepper(String(d), q)+'</div>';
+      }).join('') +
+      '<div class="qty-row custom'+(customQty[med]?' on':'')+'"><span class="custom-dose"><small>'+esc(L('sf_custom'))+'</small><input type="number" inputmode="decimal" id="pf-custom" step="0.05" placeholder="mg" value="'+esc(customDose[med])+'"></span>'+stepper('custom', customQty[med])+'</div>';
+      document.getElementById('pf-custom').oninput = function(){ customDose[med] = this.value; };
+      document.querySelectorAll('#pf-rows [data-step]').forEach(function(b){
+        b.onclick = function(){
+          var key = this.getAttribute('data-key'), step = +this.getAttribute('data-step');
+          if (key==='custom') customQty[med] = Math.max(0, customQty[med]+step);
+          else c[key] = Math.max(0, (c[key]||0)+step);
+          draw();
+        };
+      });
+    }
+    document.querySelectorAll('#pf-med button').forEach(function(b){
+      b.onclick = function(){
+        med = this.getAttribute('data-med');
+        document.querySelectorAll('#pf-med button').forEach(function(x){ x.classList.toggle('active', x.getAttribute('data-med')===med); });
+        draw();
+      };
+    });
+    draw();
+
+    document.getElementById('pf-save').onclick = function(){
+      var msgEl = document.getElementById('pf-msg');
+      var items = MEDS[med].filter(function(d){ return counts[med][d]>0; }).map(function(d){ return {doseMg:d, qty:counts[med][d]}; });
+      if (customQty[med]>0){
+        var cd = +customDose[med];
+        if (!(cd>0)){ msgEl.textContent = L('pf_needCustom'); document.getElementById('pf-custom').focus(); return; }
+        items.push({doseMg:cd, qty:customQty[med]});
+      }
+      var price = +document.getElementById('pf-price').value;
+      if (!items.length){ msgEl.textContent = L('pf_needQty'); return; }
+      if (!(price>0)){ msgEl.textContent = L('pf_needPrice'); document.getElementById('pf-price').focus(); return; }
+      addPurchase({
+        date: document.getElementById('pf-date').value || todayISO,
+        medication: med, items: items, price: price,
+        place: document.getElementById('pf-place').value.trim().slice(0,40)
+      });
+      closeSheet(); renderLedger(); renderHome();
     };
   }
 
+  /* ---------- share card ---------- */
+  var catImg = null;
+  function loadCat(){
+    if (catImg) return catImg;
+    catImg = new Promise(function(resolve){
+      var im = new Image(); im.onload = function(){ resolve(im); }; im.onerror = function(){ resolve(null); }; im.src = 'cat.webp?v=1';
+    });
+    return catImg;
+  }
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath(); ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+  }
+  function drawShareCard(showWeight){
+    var W = 1080, H = 1350;
+    var fontsReady = (document.fonts && document.fonts.load) ? Promise.all([
+      document.fonts.load('900 100px Nunito'), document.fonts.load('800 40px Nunito')
+    ]).catch(function(){}) : Promise.resolve();
+    return Promise.all([loadCat(), fontsReady]).then(function(res){
+      var cat = res[0];
+      var c = document.createElement('canvas'); c.width = W; c.height = H;
+      var ctx = c.getContext('2d');
+      var NUM = 'Nunito, -apple-system, "PingFang TC", "Noto Sans TC", sans-serif';
+      var TXT = '-apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif';
+      var lw = latestWeight(), start = mem.profile.startWeight, cur = lw ? lw.weightKg : start;
+      var lost = start - cur, pct = start ? lost/start*100 : 0;
+      var days = mem.weights.length ? Math.max(1, daysBetween(mem.weights[0].date, todayISO)) : 1;
+      var firstDate = mem.weights.length ? mem.weights[0].date : mem.profile.startDate;
+
+      var g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, '#E39A86'); g.addColorStop(1, '#C26A58');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(255,255,255,.09)';
+      ctx.beginPath(); ctx.arc(980, 120, 260, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(80, 560, 140, 0, Math.PI*2); ctx.fill();
+
+      ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.textBaseline = 'alphabetic';
+      ctx.font = '800 40px '+TXT; ctx.textAlign = 'left'; ctx.fillText(L('title_home'), 80, 120);
+      ctx.font = '800 38px '+NUM; ctx.textAlign = 'right'; ctx.fillText(todayISO.replace(/-/g,'.'), W-80, 120);
+
+      ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+      ctx.font = '700 46px '+TXT; ctx.fillText(L('share_day',{n:days}), 80, 236);
+      ctx.font = '900 210px '+NUM;
+      var bigTxt = (lost>=0?'−':'+') + kgShort(Math.abs(lost));
+      ctx.fillText(bigTxt, 72, 430);
+      var bw = ctx.measureText(bigTxt).width;
+      ctx.font = '800 72px '+NUM; ctx.globalAlpha = .85; ctx.fillText('kg', 72+bw+16, 430); ctx.globalAlpha = 1;
+
+      // pill: cumulative %
+      var pill = L('share_pct',{p:(lost>=0?'−':'+')+Math.abs(pct).toFixed(1)});
+      ctx.font = '800 40px '+TXT; var pw = ctx.measureText(pill).width + 56;
+      ctx.fillStyle = 'rgba(255,255,255,.22)'; roundRect(ctx, 80, 470, pw, 70, 35); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.fillText(pill, 108, 518);
+
+      // chart card
+      var cx = 64, cy = 600, cw = W-128, ch = 590;
+      ctx.fillStyle = '#FFFFFF'; roundRect(ctx, cx, cy, cw, ch, 48); ctx.fill();
+      ctx.fillStyle = '#2A211F'; ctx.font = '800 40px '+TXT; ctx.fillText(L('home_trendTitle'), cx+48, cy+86);
+      if (showWeight){
+        ctx.fillStyle = '#C46C5A'; ctx.font = '900 40px '+NUM; ctx.textAlign = 'right';
+        ctx.fillText(kgShort(start)+' → '+kgShort(cur)+' kg', cx+cw-48, cy+86); ctx.textAlign = 'left';
+      }
+      var pts = mem.weights.slice(-60);
+      var px0 = cx+ (showWeight?120:56), px1 = cx+cw-56, py0 = cy+140, py1 = cy+ch-110;
+      if (pts.length){
+        var xs = pts.map(function(p){ return new Date(p.date).getTime(); });
+        var ys = pts.map(function(p){ return p.weightKg; });
+        var xMin = Math.min.apply(null,xs), xMax = Math.max.apply(null,xs), yMin = Math.min.apply(null,ys), yMax = Math.max.apply(null,ys);
+        if (xMin===xMax){ xMin -= 86400000; xMax += 86400000; }
+        if (yMin===yMax){ yMin -= 1; yMax += 1; }
+        var pad = (yMax-yMin)*.12; yMin -= pad; yMax += pad;
+        var X = function(x){ return px0 + (x-xMin)/(xMax-xMin)*(px1-px0); };
+        var Y = function(y){ return py1 - (y-yMin)/(yMax-yMin)*(py1-py0); };
+        ctx.strokeStyle = '#F0E4DF'; ctx.lineWidth = 2;
+        [0,.5,1].forEach(function(f){ var yy = py0 + (py1-py0)*f; ctx.beginPath(); ctx.moveTo(px0, yy); ctx.lineTo(px1, yy); ctx.stroke(); });
+        if (showWeight){
+          ctx.fillStyle = '#AC9C97'; ctx.font = '700 30px '+NUM; ctx.textAlign = 'right';
+          ctx.fillText(Math.round(yMax), px0-18, py0+10); ctx.fillText(Math.round(yMin), px0-18, py1+10); ctx.textAlign = 'left';
+        }
+        var ag = ctx.createLinearGradient(0, py0, 0, py1); ag.addColorStop(0, 'rgba(217,130,111,.30)'); ag.addColorStop(1, 'rgba(217,130,111,0)');
+        ctx.beginPath(); pts.forEach(function(p,i){ var x = X(xs[i]), y = Y(p.weightKg); if (i) ctx.lineTo(x,y); else ctx.moveTo(x,y); });
+        ctx.lineTo(X(xs[xs.length-1]), py1); ctx.lineTo(X(xs[0]), py1); ctx.closePath(); ctx.fillStyle = ag; ctx.fill();
+        ctx.beginPath(); pts.forEach(function(p,i){ var x = X(xs[i]), y = Y(p.weightKg); if (i) ctx.lineTo(x,y); else ctx.moveTo(x,y); });
+        ctx.strokeStyle = '#D9826F'; ctx.lineWidth = 8; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+        var lx = X(xs[xs.length-1]), ly = Y(ys[ys.length-1]);
+        ctx.beginPath(); ctx.arc(lx, ly, 14, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 7; ctx.stroke();
+      }
+      ctx.fillStyle = '#7B6B66'; ctx.font = '700 32px '+NUM;
+      ctx.textAlign = 'left'; ctx.fillText(L('share_start')+' '+firstDate.replace(/-/g,'.'), cx+48, cy+ch-44);
+      ctx.textAlign = 'right'; ctx.fillText(L('share_today')+' '+todayISO.replace(/-/g,'.'), cx+cw-48, cy+ch-44);
+
+      if (cat){ var cwid = 400, chei = cwid*cat.height/cat.width; ctx.drawImage(cat, W-80-cwid, cy-chei+18, cwid, chei); }
+
+      ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.88)'; ctx.font = '700 34px '+TXT;
+      ctx.fillText(L('share_footer'), W/2, H-62);
+      return c;
+    });
+  }
+  function canvasBlob(c){ return new Promise(function(res){ c.toBlob(function(b){ res(b); }, 'image/png'); }); }
+
+  function openShareSheet(){
+    var show = !!mem.profile.shareShowWeight;
+    var blob = null;
+    sheetBody.innerHTML =
+      sheetHead(L('share_title')) +
+      '<p class="share-sub">'+esc(L('share_sub'))+'</p>' +
+      '<div class="share-preview"><img id="shareImg" alt="'+esc(L('share_title'))+'"></div>' +
+      '<div class="toggle"><div><div class="t-label">'+esc(L('share_showWeight'))+'</div><div class="t-sub">'+esc(L('share_showWeightSub'))+'</div></div>' +
+        '<div class="switch'+(show?' on':'')+'" id="shareToggle" role="switch" aria-checked="'+show+'" tabindex="0"><i></i></div></div>' +
+      '<div class="note" id="shareMsg" style="min-height:14px"></div>' +
+      '<div class="sheet-foot two"><button class="btn" id="shareSave" type="button">'+esc(L('share_save'))+'</button><button class="btn primary" id="shareGo" type="button">'+ICON.share+esc(L('share_go'))+'</button></div>';
+    overlay.classList.add('open');
+    sheetBody.scrollTop = 0;
+    document.getElementById('closeSheet').onclick = closeSheet;
+    var msg = function(t){ document.getElementById('shareMsg').textContent = t||''; };
+
+    function refresh(){
+      blob = null;
+      drawShareCard(show).then(function(c){
+        var img = document.getElementById('shareImg');
+        if (img) img.src = c.toDataURL('image/png');
+        return canvasBlob(c);
+      }).then(function(b){ blob = b; });
+    }
+    function ready(){ return blob ? Promise.resolve(blob) : drawShareCard(show).then(canvasBlob).then(function(b){ blob = b; return b; }); }
+    function download(b){
+      var url = URL.createObjectURL(b), a = document.createElement('a');
+      a.href = url; a.download = 'zhenyaozhi-'+todayISO+'.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+    }
+    var tg = document.getElementById('shareToggle');
+    tg.onclick = function(){
+      show = !show; this.classList.toggle('on', show); this.setAttribute('aria-checked', String(show));
+      saveProfile({shareShowWeight:show}); refresh();
+    };
+    tg.onkeydown = function(e){ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); this.onclick(); } };
+    document.getElementById('shareSave').onclick = function(){
+      ready().then(function(b){ download(b); msg(L('share_saved')); });
+    };
+    document.getElementById('shareGo').onclick = function(){
+      ready().then(function(b){
+        var file = new File([b], 'zhenyaozhi-'+todayISO+'.png', {type:'image/png'});
+        if (navigator.canShare && navigator.canShare({files:[file]})){
+          return navigator.share({files:[file], text:L('share_text')}).catch(function(e){ if (!e || e.name!=='AbortError') msg(L('share_failed')); });
+        }
+        download(b); msg(L('share_noShare'));
+      });
+    };
+    refresh();
+  }
 
   /* ---------- diet (飲食) ---------- */
   var dietDate = todayISO;
@@ -1256,14 +1798,14 @@
     lines.push(L('ai_weightHeader'));
     if (mem.weights.length){
       mem.weights.slice().reverse().forEach(function(w){
-        lines.push(w.date + '  ' + fmtKg(w.weightKg) + '  ' + (w.fatPercent!=null?fmtKg(w.fatPercent):'-') + '  ' + (w.fatKg!=null?fmtKg(w.fatKg):'-') + '  ' + (w.muscleKg!=null?fmtKg(w.muscleKg):'-') + '  ' + (w.visceralFat!=null?w.visceralFat:'-') + '  ' + (w.score!=null?w.score:'-'));
+        lines.push(w.date + '  ' + fmtKg(w.weightKg) + '  ' + (w.fatPercent!=null?fmtKg(w.fatPercent):'-') + '  ' + (w.fatKg!=null?fmtKg(w.fatKg):'-') + '  ' + (w.muscleKg!=null?fmtKg(w.muscleKg):'-') + '  ' + (w.visceralFat!=null?w.visceralFat:'-') + '  ' + (w.score!=null?w.score:'-') + (w.waistCm!=null?'  '+L('wf_waist')+' '+w.waistCm:'') + (w.leanKg!=null?'  '+L('wf_lean')+' '+w.leanKg:'') + (Array.isArray(w.custom)?w.custom.map(function(c){ return '  '+c.name+' '+c.value; }).join(''):''));
       });
     } else { lines.push(L('ai_noRecords')); }
     lines.push('');
     lines.push(L('ai_shotHeader'));
     if (mem.injections.length){
       mem.injections.slice().reverse().forEach(function(r){
-        lines.push(r.date + '  ' + fmtDose(r.doseMg) + 'mg  ' + siteLabel(r.site));
+        lines.push(r.date + '  ' + (r.medication?medLabel(r.medication)+' ':'') + fmtDose(r.doseMg) + 'mg  ' + siteLabel(r.site));
       });
     } else { lines.push(L('ai_noRecords')); }
     return lines.join('\n');
@@ -1325,6 +1867,7 @@
     if (name==='weight') renderWeight();
     if (name==='shot') renderShot();
     if (name==='diet') renderDiet();
+    if (name==='ledger') renderLedger();
     if (name==='settings') renderSettings();
   }
   document.getElementById('aiPill').onclick = function(){ openAISheet(); };
@@ -1338,6 +1881,7 @@
     document.getElementById('navLabelWeight').textContent = L('nav_weight');
     document.getElementById('navLabelShot').textContent = L('nav_shot');
     document.getElementById('navLabelDiet').textContent = L('nav_diet');
+    document.getElementById('navLabelLedger').textContent = L('nav_ledger');
     document.getElementById('navLabelSettings').textContent = L('nav_settings');
   }
 
