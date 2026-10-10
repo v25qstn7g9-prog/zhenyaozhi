@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>針藥誌</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F4F7F5;
+    --surface:#FFFFFF;
+    --surface-2:#EDF2EF;
+    --ink:#122A25;
+    --ink-soft:#5A7169;
+    --ink-faint:#8CA098;
+    --line:#DCE6E1;
+    --accent:#B4642A;      /* apothecary amber - injections */
+    --accent-soft:#F2E2D2;
+    --teal:#2E7C69;        /* progress / weight-down */
+    --teal-soft:#DEEEE7;
+    --warn:#C0432E;
+    --warn-soft:#F6DFD9;
+    --shadow: 0 1px 2px rgba(18,42,37,.06), 0 8px 24px -12px rgba(18,42,37,.18);
+    --font-display:'Fraunces',Georgia,serif;
+    --font-body:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E1714;
+      --surface:#16221D;
+      --surface-2:#1C2B24;
+      --ink:#EAF2EE;
+      --ink-soft:#9FB6AC;
+      --ink-faint:#6C8279;
+      --line:#25352D;
+      --accent:#E0965B;
+      --accent-soft:#3A2C1E;
+      --teal:#5CBB9E;
+      --teal-soft:#1B3129;
+      --warn:#E27D68;
+      --warn-soft:#3A2320;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1714;
+    --surface:#16221D;
+    --surface-2:#1C2B24;
+    --ink:#EAF2EE;
+    --ink-soft:#9FB6AC;
+    --ink-faint:#6C8279;
+    --line:#25352D;
+    --accent:#E0965B;
+    --accent-soft:#3A2C1E;
+    --teal:#5CBB9E;
+    --teal-soft:#1B3129;
+    --warn:#E27D68;
+    --warn-soft:#3A2320;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    max-width:460px;
+    margin:0 auto;
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+    background:var(--bg);
+    position:relative;
+  }
+  header.top{
+    position:sticky;
+    top:env(safe-area-inset-top,0px);
+    z-index:20;
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(10px);
+    padding:14px 18px 10px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    border-bottom:1px solid var(--line);
+  }
+  header.top .brand{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:19px;
+    letter-spacing:.01em;
+  }
+  header.top .brand small{
+    font-family:var(--font-body);
+    font-weight:500;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-left:8px;
+  }
+  header.top .day-badge{
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:var(--ink-soft);
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:99px;
+    padding:4px 10px;
+  }
+  main{
+    flex:1;
+    padding:16px 16px calc(96px + env(safe-area-inset-bottom,0px));
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  section.view{display:none;flex-direction:column;gap:14px;}
+  section.view.active{display:flex;}
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:16px;
+    box-shadow:var(--shadow);
+  }
+  .card h2{
+    margin:0 0 10px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink-soft);
+    letter-spacing:.03em;
+    text-transform:uppercase;
+  }
+
+  .hero{
+    background:linear-gradient(155deg, var(--teal) 0%, #1F5F50 100%);
+    color:#F4FBF8;
+    border-radius:20px;
+    padding:20px;
+    box-shadow:var(--shadow);
+    position:relative;
+    overflow:hidden;
+  }
+  .hero .eyebrow{font-size:12px;opacity:.85;font-weight:500;}
+  .hero .big{
+    font-family:var(--font-display);
+    font-size:44px;
+    font-weight:600;
+    line-height:1.1;
+    margin:4px 0 2px;
+    text-wrap:balance;
+    font-variant-numeric:tabular-nums;
+  }
+  .hero .big span{font-size:20px;font-weight:500;opacity:.85;margin-left:4px;}
+  .hero .sub{font-size:13px;opacity:.9;margin-bottom:14px;}
+  .hero .bar{
+    height:8px;border-radius:99px;background:rgba(255,255,255,.22);
+    overflow:hidden;margin-bottom:6px;
+  }
+  .hero .bar > i{display:block;height:100%;background:#FFF;border-radius:99px;}
+  .hero .bar-labels{
+    display:flex;justify-content:space-between;
+    font-family:var(--font-mono);font-size:11px;opacity:.85;
+  }
+  .hero .countdown{
+    margin-top:16px;
+    background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.28);
+    border-radius:14px;
+    padding:10px 12px;
+    display:flex;align-items:center;justify-content:space-between;
+    gap:8px;
+  }
+  .hero .countdown.overdue{background:rgba(224,125,104,.35);border-color:rgba(224,125,104,.6);}
+  .hero .countdown .cd-num{font-family:var(--font-display);font-size:22px;font-weight:600;}
+  .hero .countdown .cd-label{font-size:11px;opacity:.85;}
+
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .stat-tile{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:12px 10px;text-align:left;
+  }
+  .stat-tile .label{font-size:11px;color:var(--ink-soft);margin-bottom:4px;}
+  .stat-tile .value{font-family:var(--font-mono);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .stat-tile .value.accent{color:var(--accent);}
+  .stat-tile .value.teal{color:var(--teal);}
+
+  .action-row{display:flex;gap:10px;}
+  .btn{
+    font-family:var(--font-body);
+    font-weight:600;font-size:14px;
+    border-radius:13px;padding:12px 14px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    flex:1;
+    transition:transform .12s ease, background .15s ease;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.teal{background:var(--teal);border-color:var(--teal);color:#fff;}
+  .btn.ghost{background:transparent;}
+  .btn.block{width:100%;}
+  .btn.small{padding:8px 12px;font-size:13px;border-radius:10px;flex:none;}
+  .btn.danger{color:var(--warn);border-color:var(--warn-soft);}
+  a.btn{text-decoration:none;}
+
+  .ai-promo{display:flex;gap:12px;align-items:center;cursor:pointer;}
+  .ai-promo .icon{
+    width:38px;height:38px;border-radius:11px;flex:none;
+    background:var(--teal-soft);color:var(--teal);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .ai-promo .txt b{display:block;font-size:14px;}
+  .ai-promo .txt span{font-size:12px;color:var(--ink-soft);}
+  .ai-preview{
+    font-family:var(--font-mono);font-size:11px;line-height:1.65;white-space:pre-wrap;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:12px;
+    max-height:220px;overflow-y:auto;color:var(--ink-soft);
+  }
+
+  .seg{
+    display:flex;background:var(--surface-2);border-radius:12px;padding:3px;gap:2px;
+  }
+  .seg button{
+    flex:1;border:none;background:transparent;color:var(--ink-soft);
+    font-family:var(--font-body);font-size:12.5px;font-weight:600;
+    padding:8px 4px;border-radius:9px;cursor:pointer;
+  }
+  .seg button.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow);}
+
+  svg.chart{width:100%;height:auto;display:block;}
+  svg.chart text{font-family:var(--font-mono);fill:var(--ink-soft);}
+  .chart-legend{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;}
+  .chart-legend span{font-size:11.5px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;}
+  .chart-legend i{width:10px;height:3px;border-radius:2px;display:inline-block;}
+
+  .summary-grid{display:flex;gap:16px;align-items:center;}
+  .summary-grid .ring-wrap{position:relative;width:104px;height:104px;flex:none;}
+  .summary-grid .ring-wrap .ring-val{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  }
+  .summary-grid .ring-wrap .ring-val b{font-family:var(--font-display);font-size:19px;}
+  .summary-grid .ring-wrap .ring-val small{font-size:10px;color:var(--ink-soft);}
+  .kv-list{flex:1;display:flex;flex-direction:column;gap:8px;}
+  .kv-row{display:flex;justify-content:space-between;font-size:13px;border-bottom:1px dashed var(--line);padding-bottom:8px;}
+  .kv-row:last-child{border:none;padding-bottom:0;}
+  .kv-row .k{color:var(--ink-soft);}
+  .kv-row .v{font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums;}
+
+  table.rec{width:100%;border-collapse:collapse;font-size:13px;}
+  table.rec th{
+    text-align:left;font-size:11px;color:var(--ink-soft);font-weight:600;
+    padding:0 6px 8px;text-transform:uppercase;letter-spacing:.02em;
+  }
+  table.rec td{padding:10px 6px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums;}
+  table.rec td.num{font-family:var(--font-mono);}
+  table.rec tr td:first-child, table.rec tr th:first-child{padding-left:2px;}
+  .row-actions{display:flex;justify-content:flex-end;}
+  .icon-btn{
+    background:none;border:none;color:var(--ink-faint);cursor:pointer;padding:4px;border-radius:8px;
+  }
+  .icon-btn:hover{color:var(--warn);background:var(--warn-soft);}
+  .empty-row td{color:var(--ink-faint);text-align:center;padding:18px 6px;}
+
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .cal-head .m-label{font-weight:600;font-size:14.5px;font-family:var(--font-display);}
+  .cal-nav{display:flex;gap:4px;}
+  .cal-nav button{
+    width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--surface);
+    color:var(--ink-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;}
+  .cal-grid .dow{font-size:10.5px;color:var(--ink-faint);padding-bottom:4px;}
+  .cal-grid .day{
+    aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+    border-radius:10px;font-size:12.5px;position:relative;color:var(--ink);
+  }
+  .cal-grid .day.pad{visibility:hidden;}
+  .cal-grid .day.today{border:1px solid var(--teal);}
+  .cal-grid .day.shot{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+  .cal-grid .day.shot::after{
+    content:'';position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--accent);
+  }
+
+  .site-wrap{display:flex;gap:14px;align-items:flex-start;}
+  .site-fig{flex:none;width:126px;}
+  .site-fig svg{width:100%;}
+  .site-key{flex:1;display:flex;flex-direction:column;gap:6px;font-size:12px;}
+  .site-key .item{display:flex;align-items:center;gap:7px;}
+  .site-key .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .site-key .dot.used1{background:var(--accent);}
+  .site-key .dot.used2{background:var(--accent);opacity:.55;}
+  .site-key .dot.next{border:1.5px dashed var(--teal);background:transparent;}
+  .site-key .dot.free{border:1.5px solid var(--line);background:transparent;}
+
+  .banner{
+    background:var(--accent-soft);border:1px solid var(--accent);color:var(--ink);
+    border-radius:14px;padding:11px 14px;font-size:12.5px;display:flex;justify-content:space-between;gap:10px;align-items:center;
+  }
+  .banner button{background:none;border:none;color:var(--accent);font-weight:600;font-size:12.5px;cursor:pointer;flex:none;}
+
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+  .field label{font-size:12px;color:var(--ink-soft);font-weight:600;}
+  .field input, .field select{
+    font-family:var(--font-body);font-size:14.5px;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    padding:10px 12px;width:100%;
+  }
+  .field input:focus, .field select:focus{outline:2px solid var(--teal);outline-offset:1px;}
+  .field-row{display:flex;gap:10px;}
+  .field-row .field{flex:1;}
+  .field textarea{
+    font-family:var(--font-mono);font-size:12px;line-height:1.5;color:var(--ink);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    padding:10px 12px;width:100%;resize:vertical;min-height:80px;
+  }
+  .field textarea:focus{outline:2px solid var(--teal);outline-offset:1px;}
+  .btn.small.danger{background:var(--warn);border-color:var(--warn);color:#fff;}
+
+  .toggle{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 2px;border-top:1px solid var(--line);
+  }
+  .toggle:first-child{border-top:none;}
+  .toggle .t-label{font-size:14px;}
+  .toggle .t-sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+  .switch{
+    width:42px;height:25px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);
+    position:relative;cursor:pointer;flex:none;
+  }
+  .switch.on{background:var(--teal);border-color:var(--teal);}
+  .switch i{
+    position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s ease;
+  }
+  .switch.on i{left:19px;}
+
+  nav.bottom{
+    position:fixed;left:0;right:0;bottom:0;
+    display:flex;justify-content:center;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    z-index:30;
+    pointer-events:none;
+  }
+  nav.bottom .bar{
+    pointer-events:auto;
+    width:100%;max-width:460px;
+    background:color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);
+    display:flex;
+    padding:8px 6px 10px;
+  }
+  nav.bottom button{
+    flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:3px;
+    color:var(--ink-faint);cursor:pointer;padding:4px 0;font-family:var(--font-body);
+  }
+  nav.bottom button.active{color:var(--teal);}
+  nav.bottom button span{font-size:10.5px;font-weight:600;}
+
+  .sheet-overlay{
+    position:fixed;inset:0;background:rgba(10,20,17,.45);z-index:50;
+    display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .18s ease;
+  }
+  .sheet-overlay.open{opacity:1;pointer-events:auto;}
+  .sheet{
+    width:100%;max-width:460px;background:var(--surface);border-radius:20px 20px 0 0;
+    padding:18px 18px calc(22px + env(safe-area-inset-bottom,0px));
+    transform:translateY(16px);transition:transform .18s ease;
+    max-height:86dvh;overflow-y:auto;
+  }
+  .sheet-overlay.open .sheet{transform:translateY(0);}
+  .sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .sheet-head h3{margin:0;font-family:var(--font-display);font-size:18px;font-weight:600;}
+  .sheet-head button{background:none;border:none;color:var(--ink-faint);cursor:pointer;padding:4px;}
+
+  .note{font-size:11.5px;color:var(--ink-faint);line-height:1.5;}
+  a.plain{color:var(--teal);}
+
+  @media (max-width:380px){
+    .hero .big{font-size:36px;}
+    .stat-tile .value{font-size:15px;}
+  }
+</style>
+
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand" id="viewTitle">首頁<small id="viewSub"></small></div>
+    <div class="day-badge" id="dayBadge">第 1 天</div>
+  </header>
+
+  <main id="main">
+    <!-- HOME -->
+    <section class="view active" data-view="home" id="view-home"></section>
+    <!-- WEIGHT -->
+    <section class="view" data-view="weight" id="view-weight"></section>
+    <!-- INJECTION -->
+    <section class="view" data-view="shot" id="view-shot"></section>
+    <!-- SETTINGS -->
+    <section class="view" data-view="settings" id="view-settings"></section>
+  </main>
+
+  <nav class="bottom">
+    <div class="bar" id="navBar">
+      <button data-nav="home" class="active">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg>
+        <span id="navLabelHome">首頁</span>
+      </button>
+      <button data-nav="weight">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17 9 9l4 4 8-9"/></svg>
+        <span id="navLabelWeight">體重</span>
+      </button>
+      <button data-nav="shot">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m18 2 4 4-3 3-2-2-8 8 2 2-2 2-2-2-2 2-2-2 2-2-2-2 8-8-2-2Z"/><path d="m14 6 4 4"/></svg>
+        <span id="navLabelShot">注射</span>
+      </button>
+      <button data-nav="settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z"/></svg>
+        <span id="navLabelSettings">設定</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="sheet-overlay" id="sheetOverlay">
+    <div class="sheet" id="sheetBody"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- constants ---------- */
+  var SITES = [
+    {id:'r-abd-l', x:48, y:72},
+    {id:'l-arm',   x:100,y:34},
+    {id:'r-arm',   x:26, y:34},
+    {id:'l-abd-u', x:78, y:56},
+    {id:'r-abd-u', x:48, y:56},
+    {id:'l-abd-l', x:78, y:72},
+    {id:'l-thigh', x:82, y:108},
+    {id:'r-thigh', x:44, y:108}
+  ];
+  var SITE_LABELS = {
+    zh:{'l-arm':'左上臂','r-arm':'右上臂','l-abd-u':'左上腹','r-abd-u':'右上腹','l-abd-l':'左下腹','r-abd-l':'右下腹','l-thigh':'左大腿','r-thigh':'右大腿'},
+    en:{'l-arm':'Left upper arm','r-arm':'Right upper arm','l-abd-u':'Left upper abdomen','r-abd-u':'Right upper abdomen','l-abd-l':'Left lower abdomen','r-abd-l':'Right lower abdomen','l-thigh':'Left thigh','r-thigh':'Right thigh'}
+  };
+  var DOW = { zh:['日','一','二','三','四','五','六'], en:['S','M','T','W','T','F','S'] };
+  var MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var todayISO = new Date().toISOString().slice(0,10);
+
+  /* ---------- i18n ---------- */
+  var LANG = 'zh';
+  var T = {
+    zh:{
+      nav_home:'首頁', nav_weight:'體重', nav_shot:'注射', nav_settings:'設定',
+      title_home:'首頁', title_weight:'體重', title_shot:'注射', title_settings:'設定',
+      dayBadge:'第 {n} 天',
+      home_banner:'目前顯示的是範例資料,方便你先看看效果 — 可在「設定」清空後開始記錄自己的數據。',
+      home_bannerBtn:'知道了',
+      home_lost:'已減去', home_distGoal:'距離目標還有 {x} kg,保持節奏',
+      countdown_label:'注射倒數', overdue_label:'已超過預計注射日',
+      days_unit:'天', overdue_days:'已超過 {n} 天',
+      date_label:'預計日期',
+      streak_label:'已持續', bmi_label:'BMI', perkg_label:'每公斤花費',
+      home_chartTitle:'體重曲線 · 最近 {n} 筆',
+      legend_weight:'體重', legend_goalLine:'目標線', legend_goalKg:'目標 {kg}kg',
+      home_quickShot:'＋ 記錄注射', home_quickWeight:'＋ 記錄體重',
+      home_aiTitle:'AI 健康分析', home_aiDesc:'整理你的紀錄,一鍵請 Gemini 幫忙看趨勢（免費）',
+      range_1m:'1個月', range_3m:'3個月', range_6m:'6個月', range_all:'全部',
+      weight_goalProgress:'目標進度', weight_achieveRate:'達成率',
+      weight_totalChange:'總計變化', weight_distGoal2:'距離目標', weight_currentWeight:'目前體重',
+      weight_addBtn:'＋ 記錄體重', weight_recordsTitle:'體重紀錄 {n}',
+      th_date:'日期', th_weight:'體重', th_fat:'脂肪', th_muscle:'肌肉', th_site:'部位', th_dose:'劑量',
+      th_fatPercent:'體脂率', th_visceral:'內臟脂肪', th_score:'InBody 分數',
+      empty_weight:'還沒有體重紀錄', empty_shot:'還沒有注射紀錄',
+      shot_scheduled:'預計 {date}（{n} 天週期）',
+      shot_lastShot:'上次注射', shot_doseLabel:'劑量', shot_addBtn:'＋ 記錄注射',
+      shot_rotationTitle:'部位輪流建議', shot_lastOnce:'最近一次：{site}',
+      shot_usedRecently:'近期使用過', shot_suggestNext:'建議下次：{site}', shot_unused:'尚未使用',
+      shot_navelNote:'肚臍周圍約 5 公分（兩指寬）請避開,不論上下左右都不要選這裡。',
+      shot_calendarTitle:'注射月曆', shot_recordsTitle:'注射紀錄 {n} 筆',
+      settings_profileTitle:'個人資料', settings_gender:'性別',
+      gender_female:'生理女', gender_male:'生理男', gender_other:'其他',
+      settings_height:'身高 (cm)', settings_startWeight:'起始體重 (kg)', settings_goalWeight:'目標體重 (kg)',
+      btn_save:'儲存',
+      settings_shotTitle:'注射設定', settings_medication:'使用藥物',
+      settings_interval:'注射週期（天）', settings_spend:'累計花費（元）',
+      settings_reminder:'打針提醒', settings_reminderNote:'僅為介面示意,本頁面不會實際發送通知',
+      settings_langTitle:'語言',
+      settings_backupTitle:'備份與還原',
+      settings_backupNoteLocal:'資料存在這支手機／這個瀏覽器裡,換裝置、換 App、或清除瀏覽器資料都會不見。',
+      settings_backupNoteMemory:'目前瀏覽器無法儲存,重新整理後會還原成範例資料。',
+      settings_backupTail:' 建議定期備份,或把檔案傳給家人保留一份。',
+      settings_exportFile:'下載備份檔', settings_exportCopy:'複製備份文字',
+      settings_importFile:'選擇備份檔還原', settings_importPasteLabel:'或貼上備份文字',
+      settings_importPastePh:'貼上之前複製的備份 JSON 文字', settings_importPasteBtn:'從貼上的文字還原',
+      settings_dataMgmtTitle:'資料管理', settings_clearBtn:'清空全部紀錄重新開始',
+      settings_inbodyImportTitle:'InBody 批次匯入',
+      settings_inbodyImportNote:'從 InBody App 匯出 CSV 或 Excel 檔,一次匯入所有歷史測量紀錄。同一天的紀錄會直接更新,不會出現重複。',
+      settings_inbodyImportBtn:'選擇檔案匯入',
+      msg_inbodyParsing:'讀取中…',
+      msg_inbodyBadFile:'無法讀取這個檔案,請確認是 CSV 或 Excel 格式。',
+      msg_inbodyNoColumns:'在檔案裡找不到日期或體重欄位,請確認匯出的內容,或把欄位名稱告訴我。',
+      msg_inbodyDetected:'偵測到 {n} 筆有效紀錄（{from} ~ {to}）。匯入會更新同一天的既有紀錄,',
+      msg_inbodyImportBtn:'確認匯入',
+      msg_inbodyImported:'已匯入 {n} 筆 ✓',
+      settings_footer:'針藥誌是個人記錄用的原型工具,不提供醫療建議;劑量與用藥請以醫囑為準。',
+      msg_processing:'處理中…', msg_exportFailed:'匯出失敗,請改試複製文字',
+      msg_exportedFile:'已下載 ✓', msg_exportedClipboard:'已複製,請貼到記事本保存',
+      msg_copied:'已複製 ✓', msg_copyFailedDownload:'複製失敗,請改用下載備份檔',
+      msg_copyFailedManual:'複製失敗,請長按手動選取',
+      msg_badFile:'這個檔案格式不正確,無法還原。', msg_pasteFirst:'請先貼上備份文字。',
+      msg_badText:'這段文字格式不正確,無法還原。',
+      msg_detected:'偵測到備份：體重 {w} 筆、注射 {s} 筆。還原會覆蓋目前的紀錄,',
+      msg_confirmRestore:'確認還原', msg_restored:'已還原完成 ✓',
+      msg_confirmClear:'這會清空全部體重與注射紀錄（設定資料保留）,', msg_confirmClearBtn:'確認清空',
+      msg_cleared:'已清空 ✓',
+      ai_title:'AI 健康分析',
+      ai_note:'下面已經整理好你的紀錄。複製後貼到 Gemini 的對話框,請它幫你解讀體重曲線和注射節奏。Gemini 網頁版免費使用,不需要 API Key,資料只會貼進你自己開的對話,這個頁面不會把資料傳給任何伺服器。',
+      ai_copyBtn:'複製資料', ai_openBtn:'開啟 Gemini（免費）',
+      wf_title:'記錄體重', wf_date:'日期', wf_weight:'體重 (kg)', wf_weightPh:'例如 74.5',
+      wf_fat:'體脂重 (kg，選填)', wf_muscle:'骨骼肌重 (kg，選填)', wf_save:'儲存紀錄',
+      wf_aiImportBtn:'拍照自動填入（AI 讀取 InBody 報告）', wf_aiRecognizing:'辨識中…',
+      wf_aiFilled:'已自動填入,請確認後再儲存', wf_aiEmpty:'這張照片讀不出數據,請換一張或手動輸入',
+      wf_aiImageRejected:'這張照片無法辨識,請換一張清楚一點的', wf_aiRateLimited:'請求太頻繁,請稍後再試',
+      wf_aiUpstream:'辨識失敗,請再試一次', wf_inbodyToggle:'InBody 詳細數據（選填）',
+      wf_fatPercent:'體脂率 (%)', wf_visceralFat:'內臟脂肪等級', wf_score:'InBody 分數',
+      sf_title:'記錄注射', sf_date:'日期', sf_dose:'劑量 (mg)', sf_dosePh:'例如 0.25',
+      sf_site:'部位', sf_recommended:'（建議）', sf_save:'儲存紀錄',
+      chart_empty:'尚無資料',
+      ai_intro:'我正在使用 GLP-1 類減重藥物,以下是我的追蹤紀錄,請幫我分析體重趨勢、注射節奏,並給我一些提醒或建議（僅供參考,不取代醫囑）。',
+      ai_basicHeader:'【基本資料】', ai_genderHeight:'性別:{gender}　身高:{h}cm',
+      ai_startGoal:'起始體重:{start}kg　目標體重:{goal}kg', ai_medCycle:'用藥:{med}　注射週期約 {days} 天',
+      ai_weightHeader:'【體重紀錄】日期 體重(kg) 體脂率(%) 體脂重(kg) 骨骼肌(kg) 內臟脂肪 InBody分數，由新到舊',
+      ai_shotHeader:'【注射紀錄】日期 劑量(mg) 部位，由新到舊', ai_noRecords:'（尚無紀錄）'
+    },
+    en:{
+      nav_home:'Home', nav_weight:'Weight', nav_shot:'Shots', nav_settings:'Settings',
+      title_home:'Home', title_weight:'Weight', title_shot:'Shots', title_settings:'Settings',
+      dayBadge:'Day {n}',
+      home_banner:'This is sample data so you can see how it works — clear it in Settings to start logging your own.',
+      home_bannerBtn:'Got it',
+      home_lost:'Lost so far', home_distGoal:'{x} kg to your goal — keep it up',
+      countdown_label:'Next shot in', overdue_label:'Past your scheduled shot date',
+      days_unit:'days', overdue_days:'{n} days overdue',
+      date_label:'Scheduled date',
+      streak_label:'Tracking', bmi_label:'BMI', perkg_label:'Cost per kg',
+      home_chartTitle:'Weight trend · last {n} entries',
+      legend_weight:'Weight', legend_goalLine:'Goal line', legend_goalKg:'Goal {kg}kg',
+      home_quickShot:'＋ Log shot', home_quickWeight:'＋ Log weight',
+      home_aiTitle:'AI health analysis', home_aiDesc:'Organize your records — ask Gemini to review your trend, free',
+      range_1m:'1M', range_3m:'3M', range_6m:'6M', range_all:'All',
+      weight_goalProgress:'Goal progress', weight_achieveRate:'progress',
+      weight_totalChange:'Total change', weight_distGoal2:'Distance to goal', weight_currentWeight:'Current weight',
+      weight_addBtn:'＋ Log weight', weight_recordsTitle:'Weight log ({n})',
+      th_date:'Date', th_weight:'Weight', th_fat:'Fat', th_muscle:'Muscle', th_site:'Site', th_dose:'Dose',
+      th_fatPercent:'Fat %', th_visceral:'Visceral', th_score:'Score',
+      empty_weight:'No weight entries yet', empty_shot:'No shot entries yet',
+      shot_scheduled:'Scheduled {date} ({n}-day cycle)',
+      shot_lastShot:'Last shot', shot_doseLabel:'Dose', shot_addBtn:'＋ Log shot',
+      shot_rotationTitle:'Site rotation guide', shot_lastOnce:'Most recent: {site}',
+      shot_usedRecently:'Used recently', shot_suggestNext:'Suggested next: {site}', shot_unused:'Not used yet',
+      shot_navelNote:'Avoid an area about 5cm (two finger-widths) around your navel — in any direction, up, down, left, or right.',
+      shot_calendarTitle:'Shot calendar', shot_recordsTitle:'Shot log ({n})',
+      settings_profileTitle:'Profile', settings_gender:'Sex',
+      gender_female:'Female', gender_male:'Male', gender_other:'Other',
+      settings_height:'Height (cm)', settings_startWeight:'Starting weight (kg)', settings_goalWeight:'Goal weight (kg)',
+      btn_save:'Save',
+      settings_shotTitle:'Shot settings', settings_medication:'Medication',
+      settings_interval:'Shot interval (days)', settings_spend:'Total spend',
+      settings_reminder:'Shot reminders', settings_reminderNote:'UI only — this page does not send real notifications',
+      settings_langTitle:'Language',
+      settings_backupTitle:'Backup & restore',
+      settings_backupNoteLocal:"Your data lives only in this phone/browser — it's gone if you switch devices, apps, or clear browser data.",
+      settings_backupNoteMemory:"This browser can't store data right now — refreshing resets to sample data.",
+      settings_backupTail:' Back up regularly, or share a file with family as a copy.',
+      settings_exportFile:'Download backup', settings_exportCopy:'Copy backup text',
+      settings_importFile:'Choose backup file to restore', settings_importPasteLabel:'Or paste backup text',
+      settings_importPastePh:'Paste the backup JSON text you copied earlier', settings_importPasteBtn:'Restore from pasted text',
+      settings_dataMgmtTitle:'Data management', settings_clearBtn:'Clear all records and start over',
+      settings_inbodyImportTitle:'InBody bulk import',
+      settings_inbodyImportNote:"Export a CSV or Excel file from the InBody app to import your whole history at once. Entries on the same date are updated in place, never duplicated.",
+      settings_inbodyImportBtn:'Choose file to import',
+      msg_inbodyParsing:'Reading file…',
+      msg_inbodyBadFile:"Couldn't read this file — make sure it's a CSV or Excel export.",
+      msg_inbodyNoColumns:"Couldn't find date or weight columns in this file — check the export, or tell me the column names.",
+      msg_inbodyDetected:'Found {n} valid entries ({from} – {to}). Importing will update any existing entry on the same date,',
+      msg_inbodyImportBtn:'Confirm import',
+      msg_inbodyImported:'Imported {n} entries ✓',
+      settings_footer:'This is a personal-tracking prototype, not medical advice — follow your doctor’s guidance for dosing.',
+      msg_processing:'Working…', msg_exportFailed:'Export failed — try copying the text instead',
+      msg_exportedFile:'Downloaded ✓', msg_exportedClipboard:'Copied — paste it into notes to keep it',
+      msg_copied:'Copied ✓', msg_copyFailedDownload:'Copy failed — try downloading instead',
+      msg_copyFailedManual:'Copy failed — press and hold to select manually',
+      msg_badFile:"This file isn't a valid backup.", msg_pasteFirst:'Paste the backup text first.',
+      msg_badText:"This text isn't a valid backup.",
+      msg_detected:'Backup found: {w} weight entries, {s} shot entries. Restoring will overwrite your current data,',
+      msg_confirmRestore:'Confirm restore', msg_restored:'Restored ✓',
+      msg_confirmClear:'This clears all weight and shot entries (settings are kept),', msg_confirmClearBtn:'Confirm clear',
+      msg_cleared:'Cleared ✓',
+      ai_title:'AI health analysis',
+      ai_note:"We've formatted your records below. Copy them into Gemini's chat and ask it to read your weight trend and shot rhythm. Gemini's web app is free, needs no API key, and your data only goes into the chat you open yourself — this page never sends it anywhere.",
+      ai_copyBtn:'Copy data', ai_openBtn:'Open Gemini (free)',
+      wf_title:'Log weight', wf_date:'Date', wf_weight:'Weight (kg)', wf_weightPh:'e.g. 74.5',
+      wf_fat:'Fat mass (kg, optional)', wf_muscle:'Skeletal muscle (kg, optional)', wf_save:'Save entry',
+      wf_aiImportBtn:'Auto-fill from photo (AI reads InBody report)', wf_aiRecognizing:'Reading photo…',
+      wf_aiFilled:'Auto-filled — please review before saving', wf_aiEmpty:"Couldn't read any numbers — try another photo or enter manually",
+      wf_aiImageRejected:"Couldn't read this photo — try a clearer one", wf_aiRateLimited:'Too many requests — try again shortly',
+      wf_aiUpstream:'Reading failed — please try again', wf_inbodyToggle:'InBody details (optional)',
+      wf_fatPercent:'Body fat (%)', wf_visceralFat:'Visceral fat level', wf_score:'InBody score',
+      sf_title:'Log shot', sf_date:'Date', sf_dose:'Dose (mg)', sf_dosePh:'e.g. 0.25',
+      sf_site:'Site', sf_recommended:' (suggested)', sf_save:'Save entry',
+      chart_empty:'No data yet',
+      ai_intro:"I'm using a GLP-1 weight-loss medication. Here is my tracking data — please help analyze my weight trend and shot rhythm, and give me a few reminders or suggestions (for reference only, not a substitute for medical advice).",
+      ai_basicHeader:'[Profile]', ai_genderHeight:'Sex: {gender}  Height: {h}cm',
+      ai_startGoal:'Starting weight: {start}kg  Goal weight: {goal}kg', ai_medCycle:'Medication: {med}  Shot interval: about {days} days',
+      ai_weightHeader:'[Weight log] date, weight(kg), body fat(%), fat mass(kg), skeletal muscle(kg), visceral fat, InBody score — newest first',
+      ai_shotHeader:'[Shot log] date, dose(mg), site — newest first', ai_noRecords:'(no records yet)'
+    }
+  };
+  function L(key, vars){
+    var s = (T[LANG] && T[LANG][key]!=null) ? T[LANG][key] : T.zh[key];
+    if (s==null) return key;
+    if (vars){ Object.keys(vars).forEach(function(k){ s = s.split('{'+k+'}').join(vars[k]); }); }
+    return s;
+  }
+  function siteLabel(id){
+    return (SITE_LABELS[LANG] && SITE_LABELS[LANG][id]) || SITE_LABELS.zh[id] || id;
+  }
+  function monthLabel(y, m){
+    return LANG==='en' ? (MONTHS_EN[m] + ' ' + y) : (y + ' 年 ' + (m+1) + ' 月');
+  }
+
+  /* ---------- tiny state / persistence (per-device localStorage) ---------- */
+  var mem = {
+    profile: null,
+    weights: [],
+    injections: []
+  };
+  var LS_KEY = 'zhenyaozhi.records.v1';
+  var persistMode = 'memory'; // 'local' | 'memory'
+  var downloadsCap = null;
+  var sampleCap = null;
+  var sampleImgLimits = null;
+
+  function uuid(){ return 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+  function defaultProfile(){
+    return {
+      gender:'female', heightCm:160, startWeight:90, goalWeight:65,
+      medication:'司美格魯肽', intervalDays:7, totalSpend:0,
+      remindersOn:false, seeded:true, startDate: todayISO, lang:'zh'
+    };
+  }
+
+  function seedDemoData(){
+    var out = {weights:[], injections:[]};
+    var start = new Date(); start.setDate(start.getDate()-56);
+    var w = 90;
+    for (var i=0;i<8;i++){
+      var d = new Date(start); d.setDate(d.getDate() + i*7);
+      w = +(w - (1.1 + Math.random()*0.9)).toFixed(1);
+      out.weights.push({id:uuid(), date:d.toISOString().slice(0,10), weightKg:w, fatKg:null, muscleKg:null});
+      out.injections.push({id:uuid(), date:d.toISOString().slice(0,10), doseMg: i<3?0.25:(i<6?0.5:1.0), site:SITES[i%SITES.length].id});
+    }
+    return out;
+  }
+
+  function readLocalStorage(){
+    try{
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      if (obj && obj.profile && Array.isArray(obj.weights) && Array.isArray(obj.injections)) return obj;
+    }catch(e){}
+    return null;
+  }
+  function writeLocalStorage(){
+    if (persistMode!=='local') return false;
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections}));
+      return true;
+    }catch(e){ return false; }
+  }
+
+  async function initPersistence(){
+    try{
+      var probe = '__zy_probe__';
+      localStorage.setItem(probe, '1');
+      localStorage.removeItem(probe);
+      persistMode = 'local';
+    }catch(e){ persistMode = 'memory'; }
+
+    var saved = persistMode==='local' ? readLocalStorage() : null;
+    if (saved){
+      mem.profile = Object.assign(defaultProfile(), saved.profile, {seeded:false});
+      mem.weights = saved.weights;
+      mem.injections = saved.injections;
+    } else {
+      var seed = seedDemoData();
+      mem.profile = defaultProfile();
+      mem.weights = seed.weights;
+      mem.injections = seed.injections;
+      writeLocalStorage();
+    }
+    sortData();
+
+    try{
+      if (window.claude && window.claude.use) downloadsCap = await window.claude.use('downloads');
+    }catch(e){ downloadsCap = null; }
+
+    try{
+      if (window.claude && window.claude.use) sampleCap = await window.claude.use('sample');
+      if (sampleCap) sampleImgLimits = await sampleCap.limits().catch(function(){ return null; });
+    }catch(e){ sampleCap = null; sampleImgLimits = null; }
+  }
+
+  function sortData(){
+    mem.weights.sort(function(a,b){ return a.date.localeCompare(b.date); });
+    mem.injections.sort(function(a,b){ return a.date.localeCompare(b.date); });
+  }
+
+  async function saveProfile(patch){
+    mem.profile = Object.assign({}, mem.profile, patch);
+    writeLocalStorage();
+  }
+  async function addWeight(rec){
+    rec.id = uuid();
+    mem.weights.push(rec); sortData();
+    writeLocalStorage();
+  }
+  async function deleteWeight(id){
+    mem.weights = mem.weights.filter(function(r){ return r.id!==id; });
+    writeLocalStorage();
+  }
+  async function addInjection(rec){
+    rec.id = uuid();
+    mem.injections.push(rec); sortData();
+    writeLocalStorage();
+  }
+  async function deleteInjection(id){
+    mem.injections = mem.injections.filter(function(r){ return r.id!==id; });
+    writeLocalStorage();
+  }
+  async function clearAllData(){
+    mem.weights = []; mem.injections = [];
+    writeLocalStorage();
+  }
+  async function restoreFromBackup(obj){
+    mem.profile = Object.assign(defaultProfile(), mem.profile, obj.profile||{}, {seeded:false});
+    mem.weights = obj.weights.map(function(w){ return Object.assign({}, w, {id:w.id||uuid()}); });
+    mem.injections = obj.injections.map(function(r){ return Object.assign({}, r, {id:r.id||uuid()}); });
+    sortData();
+    writeLocalStorage();
+  }
+
+  /* ---------- backup / restore (export file or text, re-import) ---------- */
+  function buildBackupObject(){
+    return {app:'zhenyaozhi', version:1, exportedAt:new Date().toISOString(),
+      profile:mem.profile, weights:mem.weights, injections:mem.injections};
+  }
+  function backupJSONText(){ return JSON.stringify(buildBackupObject(), null, 2); }
+  function parseBackupText(text){
+    try{
+      var obj = JSON.parse(text);
+      if (obj && typeof obj==='object' && Array.isArray(obj.weights) && Array.isArray(obj.injections)) return obj;
+    }catch(e){}
+    return null;
+  }
+  async function exportBackupFile(){
+    var text = backupJSONText();
+    if (downloadsCap){
+      try{
+        await downloadsCap.save({filename:'針藥誌備份_'+todayISO+'.json', data:text});
+        return {ok:true, mode:'file'};
+      }catch(e){ /* fall through to clipboard */ }
+    }
+    var copied = await copyToClipboard(text);
+    return {ok:copied, mode:'clipboard'};
+  }
+  function confirmInline(msgEl, message, confirmLabel, onConfirm){
+    msgEl.innerHTML = esc(message) + ' <button class="btn small danger" id="__confirmBtn" type="button">'+esc(confirmLabel)+'</button>';
+    msgEl.style.color = 'var(--warn)';
+    document.getElementById('__confirmBtn').onclick = function(){ msgEl.textContent=''; onConfirm(); };
+  }
+
+  /* ---------- InBody CSV / Excel bulk import ---------- */
+  function normalizeHeader(h){
+    return String(h==null?'':h).toLowerCase().replace(/[\s_\-()]/g,'');
+  }
+  function pickColumn(headers, patterns, exclude){
+    for (var i=0;i<headers.length;i++){
+      var nh = normalizeHeader(headers[i]);
+      if (exclude && exclude.some(function(x){ return nh.indexOf(x)!==-1; })) continue;
+      for (var j=0;j<patterns.length;j++){ if (nh.indexOf(patterns[j])!==-1) return i; }
+    }
+    return -1;
+  }
+  function pad2(n){ n = String(n); return n.length<2 ? '0'+n : n; }
+  function toISODateAny(v){
+    if (v==null || v==='') return null;
+    if (v instanceof Date && !isNaN(v.getTime())) return v.getFullYear()+'-'+pad2(v.getMonth()+1)+'-'+pad2(v.getDate());
+    var s = String(v).trim();
+    // compact YYYYMMDD or YYYYMMDDHHMMSS (InBody's own native export format)
+    var cm = s.match(/^(\d{4})(\d{2})(\d{2})(\d{6})?$/);
+    if (cm){
+      var yy=+cm[1], mo=+cm[2], da=+cm[3];
+      if (yy>=1900 && yy<=2100 && mo>=1 && mo<=12 && da>=1 && da<=31) return cm[1]+'-'+pad2(mo)+'-'+pad2(da);
+    }
+    if (typeof v === 'number' && isFinite(v) && v>0 && v<100000){
+      try{
+        var dc = window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code(v);
+        if (dc && dc.y) return dc.y+'-'+pad2(dc.m)+'-'+pad2(dc.d);
+      }catch(e){}
+    }
+    var m = s.match(/^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})/);
+    if (m) return m[1]+'-'+pad2(m[2])+'-'+pad2(m[3]);
+    m = s.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})/);
+    if (m) return m[3]+'-'+pad2(m[1])+'-'+pad2(m[2]);
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+    return null;
+  }
+  function toNum(v){
+    if (v==null || v==='') return null;
+    var n = parseFloat(String(v).replace(/[^0-9.\-]/g,''));
+    return isNaN(n) ? null : n;
+  }
+
+  function parseInBodyFile(file){
+    return new Promise(function(resolve, reject){
+      var isCsv = /\.csv$/i.test(file.name);
+      var reader = new FileReader();
+      reader.onerror = function(){ reject(new Error('read_failed')); };
+      reader.onload = function(){
+        try{
+          var wb = isCsv ?
+            XLSX.read(String(reader.result), {type:'string'}) :
+            XLSX.read(reader.result, {type:'array', cellDates:true});
+          var sheet = wb.Sheets[wb.SheetNames[0]];
+          var grid = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:null});
+          if (!grid.length){ resolve({rows:[], unmatched:true}); return; }
+          var headers = grid[0].map(function(h){ return h==null?'':String(h); });
+          var idx = {
+            date: pickColumn(headers, ['testdate','date','時間','日期','測試日期','檢測日期','量測日期']),
+            weight: pickColumn(headers, ['weight(kg)','weight','體重']),
+            fatPercent: pickColumn(headers, ['pbf','bodyfatpercentage','bodyfat%','體脂率','脂肪率','體脂百分比']),
+            fatKg: pickColumn(headers, ['bfm','fatmass','bodyfatmass','體脂肪','體脂重']),
+            muscleKg: pickColumn(headers, ['smm','skeletalmuscle','骨骼肌','肌肉量']),
+            visceralFat: pickColumn(headers, ['內臟脂肪等級','visceralfatlevel','vfl','內臟脂肪'], ['面積','area','cm2','cm²']),
+            score: pickColumn(headers, ['inbodyscore','score','inbody分數','inbody評分','評分'])
+          };
+          if (idx.date===-1 || idx.weight===-1){ resolve({rows:[], unmatched:true}); return; }
+          var rows = [];
+          for (var r=1; r<grid.length; r++){
+            var row = grid[r];
+            if (!row) continue;
+            var date = toISODateAny(row[idx.date]);
+            var weightKg = toNum(row[idx.weight]);
+            if (!date || weightKg==null) continue;
+            rows.push({
+              date: date,
+              weightKg: weightKg,
+              fatPercent: idx.fatPercent>-1 ? toNum(row[idx.fatPercent]) : null,
+              fatKg: idx.fatKg>-1 ? toNum(row[idx.fatKg]) : null,
+              muscleKg: idx.muscleKg>-1 ? toNum(row[idx.muscleKg]) : null,
+              visceralFat: idx.visceralFat>-1 ? toNum(row[idx.visceralFat]) : null,
+              score: idx.score>-1 ? toNum(row[idx.score]) : null
+            });
+          }
+          resolve({rows:rows, unmatched:false});
+        }catch(e){ reject(e); }
+      };
+      if (isCsv) reader.readAsText(file, 'utf-8'); else reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function importInBodyRows(rows){
+    rows.forEach(function(rec){
+      var existing = mem.weights.find(function(w){ return w.date===rec.date; });
+      if (existing){
+        existing.weightKg = rec.weightKg;
+        if (rec.fatPercent!=null) existing.fatPercent = rec.fatPercent;
+        if (rec.fatKg!=null) existing.fatKg = rec.fatKg;
+        if (rec.muscleKg!=null) existing.muscleKg = rec.muscleKg;
+        if (rec.visceralFat!=null) existing.visceralFat = rec.visceralFat;
+        if (rec.score!=null) existing.score = rec.score;
+      } else {
+        rec.id = uuid();
+        mem.weights.push(rec);
+      }
+    });
+    sortData();
+    writeLocalStorage();
+  }
+
+  /* ---------- helpers ---------- */
+  function fmtKg(n){ return (Math.round(n*10)/10).toFixed(1); }
+  function fmtMD(iso){ var p=iso.split('-'); return p[1]+'/'+p[2]; }
+  function fmtYMD(iso){ var p=iso.split('-'); return p[0]+'年'+(+p[1])+'月'+(+p[2])+'日'; }
+  function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  function latestWeight(){
+    return mem.weights.length ? mem.weights[mem.weights.length-1] : null;
+  }
+  function latestInjection(){
+    return mem.injections.length ? mem.injections[mem.injections.length-1] : null;
+  }
+  function currentBMI(){
+    var lw = latestWeight();
+    var kg = lw ? lw.weightKg : mem.profile.startWeight;
+    var h = mem.profile.heightCm/100;
+    if (!h) return null;
+    return kg / (h*h);
+  }
+  function nextInjectionDate(){
+    var li = latestInjection();
+    var base = li ? li.date : mem.profile.startDate;
+    var d = new Date(base + 'T00:00:00');
+    d.setDate(d.getDate() + (mem.profile.intervalDays||7));
+    return d.toISOString().slice(0,10);
+  }
+  function recentSites(n){
+    var arr = mem.injections.slice(-n).reverse();
+    return arr.map(function(r){ return r.site; });
+  }
+  function recommendedSite(){
+    var used = recentSites(3);
+    for (var i=0;i<SITES.length;i++){
+      if (used.indexOf(SITES[i].id) === -1) return SITES[i].id;
+    }
+    return SITES[0].id;
+  }
+
+  /* ---------- chart ---------- */
+  function lineChart(points, opts){
+    opts = opts || {};
+    var W = 320, H = opts.height || 160, padL=34, padR=10, padT=16, padB=20;
+    if (!points.length){
+      return '<svg class="chart" viewBox="0 0 '+W+' '+H+'"><text x="'+(W/2)+'" y="'+(H/2)+'" text-anchor="middle" font-size="12">'+esc(L('chart_empty'))+'</text></svg>';
+    }
+    var xs = points.map(function(p){ return new Date(p.date).getTime(); });
+    var ys = points.map(function(p){ return p.value; });
+    if (opts.goal!=null) ys = ys.concat([opts.goal]);
+    var xMin=Math.min.apply(null,xs), xMax=Math.max.apply(null,xs);
+    var yMin=Math.min.apply(null,ys), yMax=Math.max.apply(null,ys);
+    if (xMin===xMax){ xMin -= 86400000; xMax += 86400000; }
+    if (yMin===yMax){ yMin -= 1; yMax += 1; }
+    var pad = (yMax-yMin)*0.12;
+    yMin -= pad; yMax += pad;
+    function X(x){ return padL + (x-xMin)/(xMax-xMin) * (W-padL-padR); }
+    function Y(y){ return H-padB - (y-yMin)/(yMax-yMin) * (H-padT-padB); }
+
+    var d = points.map(function(p,i){
+      var cmd = i===0 ? 'M' : 'L';
+      return cmd + X(new Date(p.date).getTime()).toFixed(1) + ' ' + Y(p.value).toFixed(1);
+    }).join(' ');
+    var area = d + ' L' + X(xs[xs.length-1]).toFixed(1) + ' ' + (H-padB) + ' L' + X(xs[0]).toFixed(1) + ' ' + (H-padB) + ' Z';
+
+    var gridY = [];
+    for (var g=0; g<=2; g++){
+      var gy = yMin + (yMax-yMin)*g/2;
+      gridY.push('<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+Y(gy).toFixed(1)+'" y2="'+Y(gy).toFixed(1)+'" stroke="var(--line)" stroke-width="1"/>' +
+        '<text x="'+(padL-6)+'" y="'+(Y(gy)+3).toFixed(1)+'" text-anchor="end" font-size="9.5">'+fmtKg(gy)+'</text>');
+    }
+
+    var goalLine = '';
+    if (opts.goal!=null){
+      goalLine = '<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+Y(opts.goal).toFixed(1)+'" y2="'+Y(opts.goal).toFixed(1)+'" stroke="var(--teal)" stroke-width="1.3" stroke-dasharray="3 3"/>';
+    }
+
+    var lastX = X(xs[xs.length-1]), lastY = Y(ys.length && opts.goal!=null ? points[points.length-1].value : points[points.length-1].value);
+    var last = points[points.length-1];
+    var xLabels = '<text x="'+padL+'" y="'+(H-4)+'" font-size="9.5">'+fmtMD(points[0].date)+'</text>' +
+      '<text x="'+(W-padR)+'" y="'+(H-4)+'" text-anchor="end" font-size="9.5">'+fmtMD(points[points.length-1].date)+'</text>';
+
+    return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">' +
+      '<defs><linearGradient id="fillg" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.25"/>' +
+        '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>' +
+      '</linearGradient></defs>' +
+      gridY.join('') + goalLine +
+      '<path d="'+area+'" fill="url(#fillg)"/>' +
+      '<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<circle cx="'+X(xs[xs.length-1]).toFixed(1)+'" cy="'+Y(points[points.length-1].value).toFixed(1)+'" r="3.6" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.6"/>' +
+      xLabels +
+      '</svg>';
+  }
+
+  /* ---------- body site diagram ---------- */
+  function bodyDiagram(){
+    var used1 = recentSites(1)[0];
+    var used2 = recentSites(3).slice(1);
+    var rec = recommendedSite();
+    var dots = SITES.map(function(s){
+      var cls = 'free', ring='';
+      if (s.id===used1) cls='used1';
+      else if (used2.indexOf(s.id)!==-1) cls='used2';
+      if (s.id===rec) ring = '<circle cx="'+s.x+'" cy="'+s.y+'" r="7.2" fill="none" stroke="var(--teal)" stroke-width="1.4" stroke-dasharray="2.4 2.2"/>';
+      var fill = cls==='used1' ? 'var(--accent)' : cls==='used2' ? 'var(--accent)' : 'var(--surface)';
+      var op = cls==='used2' ? '0.55' : '1';
+      var stroke = cls==='free' ? 'var(--line)' : 'none';
+      return ring + '<circle cx="'+s.x+'" cy="'+s.y+'" r="4.6" fill="'+fill+'" fill-opacity="'+op+'" stroke="'+stroke+'" stroke-width="1.2"/>';
+    }).join('');
+    return '<svg viewBox="0 0 126 152">' +
+      '<circle cx="63" cy="12" r="9" fill="none" stroke="var(--line)" stroke-width="1.4"/>' +
+      '<path d="M40 26 Q63 18 86 26 L92 60 Q94 96 88 132 L74 132 L70 76 L56 76 L52 132 L38 132 Q32 96 34 60 Z" fill="none" stroke="var(--line)" stroke-width="1.4"/>' +
+      '<line x1="40" y1="30" x2="18" y2="50" stroke="var(--line)" stroke-width="1.4"/>' +
+      '<line x1="86" y1="30" x2="108" y2="50" stroke="var(--line)" stroke-width="1.4"/>' +
+      dots +
+      '</svg>';
+  }
+
+  /* ---------- calendar ---------- */
+  var calYear, calMonth;
+  function ensureCalInit(){
+    if (calYear==null){
+      var t = new Date(); calYear = t.getFullYear(); calMonth = t.getMonth();
+    }
+  }
+  function calendarHTML(){
+    ensureCalInit();
+    var first = new Date(calYear, calMonth, 1);
+    var startDow = first.getDay();
+    var daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+    var shotDates = {};
+    mem.injections.forEach(function(r){ shotDates[r.date]=true; });
+    var cells = '';
+    for (var i=0;i<startDow;i++) cells += '<div class="day pad"></div>';
+    for (var d=1; d<=daysInMonth; d++){
+      var iso = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      var cls = 'day';
+      if (iso===todayISO) cls += ' today';
+      if (shotDates[iso]) cls += ' shot';
+      cells += '<div class="'+cls+'">'+d+'</div>';
+    }
+    return '<div class="cal-head"><div class="m-label">'+monthLabel(calYear,calMonth)+'</div>' +
+      '<div class="cal-nav"><button data-cal="prev">‹</button><button data-cal="next">›</button></div></div>' +
+      '<div class="cal-grid">' + DOW[LANG].map(function(w){ return '<div class="dow">'+w+'</div>'; }).join('') + cells + '</div>';
+  }
+
+  /* ---------- views ---------- */
+  var currentView = 'home';
+  var demoBannerDismissed = false;
+
+  function renderHome(){
+    var lw = latestWeight();
+    var curW = lw ? lw.weightKg : mem.profile.startWeight;
+    var lost = mem.profile.startWeight - curW;
+    var goalDist = Math.max(0, curW - mem.profile.goalWeight);
+    var total = mem.profile.startWeight - mem.profile.goalWeight;
+    var pct = total>0 ? Math.min(100, Math.max(0,(lost/total)*100)) : 0;
+    var nd = nextInjectionDate();
+    var cd = daysBetween(todayISO, nd);
+    var streak = mem.weights.length ? daysBetween(mem.weights[0].date, todayISO) : 0;
+    var bmi = currentBMI();
+    var perKg = (lost>0.05 && mem.profile.totalSpend>0) ? (mem.profile.totalSpend/lost) : null;
+
+    var chartPts = mem.weights.map(function(w){ return {date:w.date, value:w.weightKg}; });
+
+    var banner = (mem.profile.seeded && !demoBannerDismissed) ?
+      '<div class="banner"><span>'+esc(L('home_banner'))+'</span><button id="dismissBanner">'+esc(L('home_bannerBtn'))+'</button></div>' : '';
+
+    document.getElementById('view-home').innerHTML =
+      banner +
+      '<div class="hero">' +
+        '<div class="eyebrow">'+esc(L('home_lost'))+'</div>' +
+        '<div class="big">'+ (lost>=0?'−':'+') + fmtKg(Math.abs(lost)) + '<span>kg</span></div>' +
+        '<div class="sub">' + esc(L('home_distGoal',{x:fmtKg(goalDist)})) + '</div>' +
+        '<div class="bar"><i style="width:'+pct.toFixed(0)+'%"></i></div>' +
+        '<div class="bar-labels"><span>'+fmtKg(mem.profile.startWeight)+'kg</span><span>'+fmtKg(mem.profile.goalWeight)+'kg</span></div>' +
+        '<div class="countdown'+(cd<0?' overdue':'')+'">' +
+          '<div><div class="cd-label">'+esc(cd<0?L('overdue_label'):L('countdown_label'))+'</div><div class="cd-num">'+(cd<0? esc(L('overdue_days',{n:Math.abs(cd)})) : (cd+' '+esc(L('days_unit'))))+'</div></div>' +
+          '<div style="text-align:right"><div class="cd-label">'+esc(L('date_label'))+'</div><div class="cd-num" style="font-size:15px">'+fmtMD(nd)+'</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="stat-row">' +
+        '<div class="stat-tile"><div class="label">'+esc(L('streak_label'))+'</div><div class="value teal">'+streak+' '+esc(L('days_unit'))+'</div></div>' +
+        '<div class="stat-tile"><div class="label">'+esc(L('bmi_label'))+'</div><div class="value">'+(bmi?bmi.toFixed(1):'—')+'</div></div>' +
+        '<div class="stat-tile"><div class="label">'+esc(L('perkg_label'))+'</div><div class="value accent">'+(perKg!=null?('$'+Math.round(perKg)):'—')+'</div></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('home_chartTitle',{n:chartPts.length}))+'</h2>' +
+        lineChart(chartPts.slice(-30), {goal:mem.profile.goalWeight}) +
+        '<div class="chart-legend"><span><i style="background:var(--accent)"></i>'+esc(L('legend_weight'))+'</span><span><i style="background:var(--teal);opacity:.7"></i>'+esc(L('legend_goalLine'))+'</span></div>' +
+      '</div>' +
+      '<div class="action-row">' +
+        '<button class="btn primary" id="quickShot">'+esc(L('home_quickShot'))+'</button>' +
+        '<button class="btn teal" id="quickWeight">'+esc(L('home_quickWeight'))+'</button>' +
+      '</div>' +
+      '<div class="card ai-promo" id="aiPromoBtn">' +
+        '<div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg></div>' +
+        '<div class="txt"><b>'+esc(L('home_aiTitle'))+'</b><span>'+esc(L('home_aiDesc'))+'</span></div>' +
+      '</div>';
+
+    var bn = document.getElementById('dismissBanner');
+    if (bn) bn.onclick = function(){ demoBannerDismissed = true; renderHome(); };
+    var qs = document.getElementById('quickShot'); if (qs) qs.onclick = openInjectionForm;
+    var qw = document.getElementById('quickWeight'); if (qw) qw.onclick = openWeightForm;
+    var ap = document.getElementById('aiPromoBtn'); if (ap) ap.onclick = openAISheet;
+  }
+
+  var weightRange = '3m';
+  function filteredWeights(){
+    if (weightRange==='all' || !mem.weights.length) return mem.weights;
+    var days = weightRange==='1m'?30:weightRange==='3m'?90:180;
+    var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
+    var cutIso = cutoff.toISOString().slice(0,10);
+    return mem.weights.filter(function(w){ return w.date>=cutIso; });
+  }
+
+  function renderWeight(){
+    var pts = filteredWeights().map(function(w){ return {date:w.date, value:w.weightKg}; });
+    var lw = latestWeight();
+    var curW = lw?lw.weightKg:mem.profile.startWeight;
+    var lost = mem.profile.startWeight - curW;
+    var pctChange = mem.profile.startWeight ? (lost/mem.profile.startWeight*100) : 0;
+    var goalDist = Math.max(0, curW - mem.profile.goalWeight);
+    var total = mem.profile.startWeight - mem.profile.goalWeight;
+    var pct = total>0 ? Math.min(100, Math.max(0,(lost/total)*100)) : 0;
+    var circumference = 2*Math.PI*40;
+    var dash = circumference*pct/100;
+
+    var rows = mem.weights.slice().reverse().map(function(w){
+      return '<tr><td>'+fmtMD(w.date)+'</td><td class="num">'+fmtKg(w.weightKg)+'</td>' +
+        '<td class="num">'+(w.fatPercent!=null?fmtKg(w.fatPercent):'—')+'</td>' +
+        '<td class="num">'+(w.fatKg!=null?fmtKg(w.fatKg):'—')+'</td>' +
+        '<td class="num">'+(w.muscleKg!=null?fmtKg(w.muscleKg):'—')+'</td>' +
+        '<td class="num">'+(w.visceralFat!=null?w.visceralFat:'—')+'</td>' +
+        '<td class="num">'+(w.score!=null?w.score:'—')+'</td>' +
+        '<td class="row-actions"><button class="icon-btn" data-del-weight="'+w.id+'">'+
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>' +
+        '</button></td></tr>';
+    }).join('');
+    if (!rows) rows = '<tr class="empty-row"><td colspan="8">'+esc(L('empty_weight'))+'</td></tr>';
+
+    document.getElementById('view-weight').innerHTML =
+      '<div class="card">' +
+        '<div class="seg" id="rangeSeg">' +
+          ['1m','3m','6m','all'].map(function(r){
+            var label = r==='1m'?L('range_1m'):r==='3m'?L('range_3m'):r==='6m'?L('range_6m'):L('range_all');
+            return '<button data-range="'+r+'" class="'+(weightRange===r?'active':'')+'">'+esc(label)+'</button>';
+          }).join('') +
+        '</div>' +
+        '<div style="height:10px"></div>' +
+        lineChart(pts, {goal:mem.profile.goalWeight, height:170}) +
+        '<div class="chart-legend"><span><i style="background:var(--accent)"></i>'+esc(L('legend_weight'))+'</span><span><i style="background:var(--teal);opacity:.7"></i>'+esc(L('legend_goalKg',{kg:fmtKg(mem.profile.goalWeight)}))+'</span></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('weight_goalProgress'))+'</h2>' +
+        '<div class="summary-grid">' +
+          '<div class="ring-wrap"><svg viewBox="0 0 96 96"><circle cx="48" cy="48" r="40" fill="none" stroke="var(--surface-2)" stroke-width="9"/>' +
+          '<circle cx="48" cy="48" r="40" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" ' +
+          'stroke-dasharray="'+dash.toFixed(1)+' '+circumference.toFixed(1)+'" transform="rotate(-90 48 48)"/></svg>' +
+          '<div class="ring-val"><b>'+pct.toFixed(0)+'%</b><small>'+esc(L('weight_achieveRate'))+'</small></div></div>' +
+          '<div class="kv-list">' +
+            '<div class="kv-row"><span class="k">'+esc(L('weight_totalChange'))+'</span><span class="v">'+(lost>=0?'−':'+')+fmtKg(Math.abs(lost))+' kg ('+pctChange.toFixed(1)+'%)</span></div>' +
+            '<div class="kv-row"><span class="k">'+esc(L('weight_distGoal2'))+'</span><span class="v">'+fmtKg(goalDist)+' kg</span></div>' +
+            '<div class="kv-row"><span class="k">'+esc(L('weight_currentWeight'))+'</span><span class="v">'+fmtKg(curW)+' kg</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn primary block" id="addWeightBtn">'+esc(L('weight_addBtn'))+'</button>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('weight_recordsTitle',{n:mem.weights.length}))+'</h2>' +
+        '<div style="overflow-x:auto"><table class="rec"><thead><tr><th>'+esc(L('th_date'))+'</th><th>'+esc(L('th_weight'))+'</th><th>'+esc(L('th_fatPercent'))+'</th><th>'+esc(L('th_fat'))+'</th><th>'+esc(L('th_muscle'))+'</th><th>'+esc(L('th_visceral'))+'</th><th>'+esc(L('th_score'))+'</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>' +
+      '</div>';
+
+    document.getElementById('addWeightBtn').onclick = openWeightForm;
+    document.querySelectorAll('#rangeSeg button').forEach(function(b){
+      b.onclick = function(){ weightRange = this.getAttribute('data-range'); renderWeight(); };
+    });
+    document.querySelectorAll('[data-del-weight]').forEach(function(b){
+      b.onclick = function(){ deleteWeight(this.getAttribute('data-del-weight')).then(renderWeight); };
+    });
+  }
+
+  function renderShot(){
+    var nd = nextInjectionDate();
+    var cd = daysBetween(todayISO, nd);
+    var li = latestInjection();
+    var rec = recommendedSite();
+
+    var rows = mem.injections.slice().reverse().map(function(r){
+      return '<tr><td>'+fmtMD(r.date)+'</td><td>'+siteLabel(r.site)+'</td><td class="num">'+fmtKg(r.doseMg)+' mg</td>' +
+        '<td class="row-actions"><button class="icon-btn" data-del-shot="'+r.id+'">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>' +
+        '</button></td></tr>';
+    }).join('');
+    if (!rows) rows = '<tr class="empty-row"><td colspan="4">'+esc(L('empty_shot'))+'</td></tr>';
+
+    document.getElementById('view-shot').innerHTML =
+      '<div class="hero">' +
+        '<div class="eyebrow">'+esc(cd<0?L('overdue_label'):L('countdown_label'))+'</div>' +
+        '<div class="big">'+(cd<0?Math.abs(cd):cd)+'<span>'+esc(L('days_unit'))+'</span></div>' +
+        '<div class="sub">' + esc(L('shot_scheduled',{date:fmtMD(nd), n:(mem.profile.intervalDays||7)})) + '</div>' +
+        (li ? '<div class="countdown"><div><div class="cd-label">'+esc(L('shot_lastShot'))+'</div><div class="cd-num" style="font-size:16px">'+fmtMD(li.date)+' · '+esc(siteLabel(li.site))+'</div></div><div style="text-align:right"><div class="cd-label">'+esc(L('shot_doseLabel'))+'</div><div class="cd-num" style="font-size:16px">'+fmtKg(li.doseMg)+' mg</div></div></div>' : '') +
+      '</div>' +
+      '<button class="btn primary block" id="addShotBtn">'+esc(L('shot_addBtn'))+'</button>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('shot_rotationTitle'))+'</h2>' +
+        '<div class="site-wrap">' +
+          '<div class="site-fig">'+bodyDiagram()+'</div>' +
+          '<div class="site-key">' +
+            '<div class="item"><span class="dot used1"></span>'+esc(L('shot_lastOnce',{site:li?siteLabel(li.site):'—'}))+'</div>' +
+            '<div class="item"><span class="dot used2"></span>'+esc(L('shot_usedRecently'))+'</div>' +
+            '<div class="item"><span class="dot next"></span>'+esc(L('shot_suggestNext',{site:siteLabel(rec)}))+'</div>' +
+            '<div class="item"><span class="dot free"></span>'+esc(L('shot_unused'))+'</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="note" style="margin-top:12px">'+esc(L('shot_navelNote'))+'</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('shot_calendarTitle'))+'</h2>' +
+        '<div id="calBox">'+calendarHTML()+'</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('shot_recordsTitle',{n:mem.injections.length}))+'</h2>' +
+        '<div style="overflow-x:auto"><table class="rec"><thead><tr><th>'+esc(L('th_date'))+'</th><th>'+esc(L('th_site'))+'</th><th>'+esc(L('th_dose'))+'</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>' +
+      '</div>';
+
+    document.getElementById('addShotBtn').onclick = openInjectionForm;
+    document.querySelectorAll('[data-del-shot]').forEach(function(b){
+      b.onclick = function(){ deleteInjection(this.getAttribute('data-del-shot')).then(renderShot); };
+    });
+    bindCalNav();
+  }
+
+  function bindCalNav(){
+    var box = document.getElementById('calBox');
+    if (!box) return;
+    box.querySelectorAll('[data-cal]').forEach(function(b){
+      b.onclick = function(){
+        ensureCalInit();
+        if (this.getAttribute('data-cal')==='prev'){ calMonth--; if (calMonth<0){calMonth=11;calYear--;} }
+        else { calMonth++; if (calMonth>11){calMonth=0;calYear++;} }
+        box.innerHTML = calendarHTML();
+        bindCalNav();
+      };
+    });
+  }
+
+  function renderSettings(){
+    var p = mem.profile;
+    document.getElementById('view-settings').innerHTML =
+      '<div class="card">' +
+        '<h2>'+esc(L('settings_langTitle'))+'</h2>' +
+        '<div class="seg" id="langSeg">' +
+          '<button data-lang="zh" class="'+(LANG==='zh'?'active':'')+'">中文</button>' +
+          '<button data-lang="en" class="'+(LANG==='en'?'active':'')+'">English</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('settings_profileTitle'))+'</h2>' +
+        '<div class="field-row">' +
+          '<div class="field"><label>'+esc(L('settings_gender'))+'</label><select id="f-gender">' +
+            '<option value="female"'+(p.gender==='female'?' selected':'')+'>'+esc(L('gender_female'))+'</option>' +
+            '<option value="male"'+(p.gender==='male'?' selected':'')+'>'+esc(L('gender_male'))+'</option>' +
+            '<option value="other"'+(p.gender==='other'?' selected':'')+'>'+esc(L('gender_other'))+'</option>' +
+          '</select></div>' +
+          '<div class="field"><label>'+esc(L('settings_height'))+'</label><input id="f-height" type="number" inputmode="decimal" value="'+p.heightCm+'"></div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label>'+esc(L('settings_startWeight'))+'</label><input id="f-start" type="number" inputmode="decimal" value="'+p.startWeight+'"></div>' +
+          '<div class="field"><label>'+esc(L('settings_goalWeight'))+'</label><input id="f-goal" type="number" inputmode="decimal" value="'+p.goalWeight+'"></div>' +
+        '</div>' +
+        '<button class="btn teal block" id="saveProfile1">'+esc(L('btn_save'))+'</button>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('settings_shotTitle'))+'</h2>' +
+        '<div class="field"><label>'+esc(L('settings_medication'))+'</label><input id="f-med" type="text" value="'+esc(p.medication)+'"></div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label>'+esc(L('settings_interval'))+'</label><input id="f-interval" type="number" inputmode="numeric" value="'+p.intervalDays+'"></div>' +
+          '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="number" inputmode="decimal" value="'+p.totalSpend+'"></div>' +
+        '</div>' +
+        '<div class="toggle">' +
+          '<div><div class="t-label">'+esc(L('settings_reminder'))+'</div><div class="t-sub">'+esc(L('settings_reminderNote'))+'</div></div>' +
+          '<div class="switch'+(p.remindersOn?' on':'')+'" id="remindToggle"><i></i></div>' +
+        '</div>' +
+        '<button class="btn teal block" id="saveProfile2" style="margin-top:12px">'+esc(L('btn_save'))+'</button>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('settings_backupTitle'))+'</h2>' +
+        '<div class="note" style="margin-bottom:10px">'+esc(persistMode==='local' ? L('settings_backupNoteLocal') : L('settings_backupNoteMemory'))+esc(L('settings_backupTail'))+'</div>' +
+        '<div class="action-row">' +
+          '<button class="btn primary" id="exportFileBtn">'+esc(L('settings_exportFile'))+'</button>' +
+          '<button class="btn ghost" id="exportCopyBtn">'+esc(L('settings_exportCopy'))+'</button>' +
+        '</div>' +
+        '<div style="height:16px"></div>' +
+        '<input type="file" id="importFileInput" accept="application/json,.json" hidden>' +
+        '<button class="btn block" id="importFileBtn">'+esc(L('settings_importFile'))+'</button>' +
+        '<div style="height:12px"></div>' +
+        '<div class="field"><label>'+esc(L('settings_importPasteLabel'))+'</label><textarea id="importPaste" rows="4" placeholder="'+esc(L('settings_importPastePh'))+'"></textarea></div>' +
+        '<button class="btn teal block" id="importPasteBtn">'+esc(L('settings_importPasteBtn'))+'</button>' +
+        '<div class="note" id="backupMsg" style="margin-top:10px;min-height:14px"></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('settings_inbodyImportTitle'))+'</h2>' +
+        '<div class="note" style="margin-bottom:10px">'+esc(L('settings_inbodyImportNote'))+'</div>' +
+        '<input type="file" id="inbodyFileInput" accept=".csv,.xlsx,.xls" hidden>' +
+        '<button class="btn primary block" id="inbodyImportBtn">'+esc(L('settings_inbodyImportBtn'))+'</button>' +
+        '<div class="note" id="inbodyMsg" style="margin-top:10px;min-height:14px"></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>'+esc(L('settings_dataMgmtTitle'))+'</h2>' +
+        '<button class="btn danger block" id="clearBtn">'+esc(L('settings_clearBtn'))+'</button>' +
+        '<div class="note" id="clearMsg" style="margin-top:10px;min-height:14px"></div>' +
+      '</div>' +
+      '<div class="note" style="text-align:center;padding:4px 12px 0">'+esc(L('settings_footer'))+'</div>';
+
+    document.querySelectorAll('#langSeg button').forEach(function(b){
+      b.onclick = function(){
+        var newLang = this.getAttribute('data-lang');
+        if (newLang===LANG) return;
+        saveProfile({lang:newLang}).then(function(){
+          LANG = newLang;
+          updateNavLabels();
+          updateDayBadge();
+          switchView('settings');
+        });
+      };
+    });
+
+    function save(){
+      saveProfile({
+        gender: document.getElementById('f-gender').value,
+        heightCm: +document.getElementById('f-height').value || p.heightCm,
+        startWeight: +document.getElementById('f-start').value || p.startWeight,
+        goalWeight: +document.getElementById('f-goal').value || p.goalWeight,
+        medication: document.getElementById('f-med').value || p.medication,
+        intervalDays: +document.getElementById('f-interval').value || p.intervalDays,
+        totalSpend: +document.getElementById('f-spend').value || 0
+      }).then(function(){ renderSettings(); });
+    }
+    document.getElementById('saveProfile1').onclick = save;
+    document.getElementById('saveProfile2').onclick = save;
+    document.getElementById('remindToggle').onclick = function(){
+      saveProfile({remindersOn: !mem.profile.remindersOn}).then(renderSettings);
+    };
+
+    function refreshAll(){ renderHome(); renderWeight(); renderShot(); }
+
+    document.getElementById('exportFileBtn').onclick = function(){
+      var btn = this, orig = btn.textContent;
+      btn.textContent = L('msg_processing');
+      exportBackupFile().then(function(res){
+        btn.textContent = !res.ok ? L('msg_exportFailed') : (res.mode==='file' ? L('msg_exportedFile') : L('msg_exportedClipboard'));
+        setTimeout(function(){ btn.textContent = orig; }, 2200);
+      });
+    };
+    document.getElementById('exportCopyBtn').onclick = function(){
+      var btn = this;
+      copyToClipboard(backupJSONText()).then(function(ok){
+        btn.textContent = ok ? L('msg_copied') : L('msg_copyFailedDownload');
+        setTimeout(function(){ btn.textContent = L('settings_exportCopy'); }, 1800);
+      });
+    };
+    document.getElementById('importFileBtn').onclick = function(){
+      document.getElementById('importFileInput').click();
+    };
+    document.getElementById('importFileInput').onchange = function(e){
+      var f = e.target.files && e.target.files[0];
+      var msg = document.getElementById('backupMsg');
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        var obj = parseBackupText(String(reader.result));
+        e.target.value = '';
+        if (!obj){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badFile'); return; }
+        confirmInline(msg, L('msg_detected',{w:obj.weights.length, s:obj.injections.length}), L('msg_confirmRestore'), function(){
+          restoreFromBackup(obj).then(function(){
+            LANG = mem.profile.lang || LANG;
+            msg.style.color='var(--teal)'; msg.textContent=L('msg_restored');
+            updateNavLabels(); updateDayBadge(); refreshAll(); renderSettings();
+          });
+        });
+      };
+      reader.readAsText(f, 'utf-8');
+    };
+    document.getElementById('importPasteBtn').onclick = function(){
+      var msg = document.getElementById('backupMsg');
+      var text = document.getElementById('importPaste').value.trim();
+      if (!text){ msg.style.color='var(--warn)'; msg.textContent=L('msg_pasteFirst'); return; }
+      var obj = parseBackupText(text);
+      if (!obj){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badText'); return; }
+      confirmInline(msg, L('msg_detected',{w:obj.weights.length, s:obj.injections.length}), L('msg_confirmRestore'), function(){
+        restoreFromBackup(obj).then(function(){
+          LANG = mem.profile.lang || LANG;
+          msg.style.color='var(--teal)'; msg.textContent=L('msg_restored');
+          updateNavLabels(); updateDayBadge(); refreshAll(); renderSettings();
+        });
+      });
+    };
+    document.getElementById('inbodyImportBtn').onclick = function(){
+      document.getElementById('inbodyFileInput').click();
+    };
+    document.getElementById('inbodyFileInput').onchange = function(e){
+      var f = e.target.files && e.target.files[0];
+      var msg = document.getElementById('inbodyMsg');
+      e.target.value = '';
+      if (!f) return;
+      msg.style.color = 'var(--ink-faint)';
+      msg.textContent = L('msg_inbodyParsing');
+      parseInBodyFile(f).then(function(res){
+        if (res.unmatched || !res.rows.length){
+          msg.style.color = 'var(--warn)';
+          msg.textContent = L('msg_inbodyNoColumns');
+          return;
+        }
+        var dates = res.rows.map(function(r){ return r.date; }).sort();
+        confirmInline(msg, L('msg_inbodyDetected', {n:res.rows.length, from:dates[0], to:dates[dates.length-1]}), L('msg_inbodyImportBtn'), function(){
+          importInBodyRows(res.rows).then(function(){
+            msg.style.color = 'var(--teal)';
+            msg.textContent = L('msg_inbodyImported', {n:res.rows.length});
+            refreshAll(); renderSettings();
+          });
+        });
+      }).catch(function(){
+        msg.style.color = 'var(--warn)';
+        msg.textContent = L('msg_inbodyBadFile');
+      });
+    };
+    document.getElementById('clearBtn').onclick = function(){
+      var msg = document.getElementById('clearMsg');
+      confirmInline(msg, L('msg_confirmClear'), L('msg_confirmClearBtn'), function(){
+        clearAllData().then(function(){
+          msg.style.color='var(--teal)'; msg.textContent=L('msg_cleared');
+          refreshAll();
+        });
+      });
+    };
+  }
+
+  /* ---------- forms (bottom sheet) ---------- */
+  var overlay = document.getElementById('sheetOverlay');
+  var sheetBody = document.getElementById('sheetBody');
+  function closeSheet(){ overlay.classList.remove('open'); }
+  overlay.addEventListener('click', function(e){ if (e.target===overlay) closeSheet(); });
+
+  function openWeightForm(){
+    var aiAvailable = !!(sampleCap && sampleImgLimits && sampleImgLimits.images);
+    sheetBody.innerHTML =
+      '<div class="sheet-head"><h3>'+esc(L('wf_title'))+'</h3><button id="closeSheet">✕</button></div>' +
+      (aiAvailable ?
+        '<input type="file" id="wf-ai-input" accept="'+esc((sampleImgLimits.images.mediaTypes||['image/*']).join(','))+'" hidden>' +
+        '<button class="btn ghost block" id="wf-ai-btn" type="button">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="14" r="3.5"/></svg> ' +
+          esc(L('wf_aiImportBtn')) +
+        '</button>' +
+        '<div class="note" id="wf-ai-msg" style="margin:8px 0 4px;min-height:14px"></div>'
+      : '') +
+      '<div class="field"><label>'+esc(L('wf_date'))+'</label><input type="date" id="wf-date" value="'+todayISO+'"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>'+esc(L('wf_weight'))+'</label><input type="number" inputmode="decimal" id="wf-weight" step="0.1" placeholder="'+esc(L('wf_weightPh'))+'"></div>' +
+        '<div class="field"><label>'+esc(L('wf_fatPercent'))+'</label><input type="number" inputmode="decimal" id="wf-fatpct" step="0.1"></div>' +
+      '</div>' +
+      '<button class="btn ghost small" id="wf-inbody-toggle" type="button" style="margin-bottom:12px">'+esc(L('wf_inbodyToggle'))+' ▾</button>' +
+      '<div id="wf-inbody-fields" hidden>' +
+        '<div class="field-row">' +
+          '<div class="field"><label>'+esc(L('wf_fat'))+'</label><input type="number" inputmode="decimal" id="wf-fat" step="0.1"></div>' +
+          '<div class="field"><label>'+esc(L('wf_muscle'))+'</label><input type="number" inputmode="decimal" id="wf-muscle" step="0.1"></div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<div class="field"><label>'+esc(L('wf_visceralFat'))+'</label><input type="number" inputmode="numeric" id="wf-visceral" step="1"></div>' +
+          '<div class="field"><label>'+esc(L('wf_score'))+'</label><input type="number" inputmode="numeric" id="wf-score" step="1"></div>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn primary block" id="wf-save">'+esc(L('wf_save'))+'</button>';
+    overlay.classList.add('open');
+    document.getElementById('closeSheet').onclick = closeSheet;
+
+    document.getElementById('wf-inbody-toggle').onclick = function(){
+      var box = document.getElementById('wf-inbody-fields');
+      box.hidden = !box.hidden;
+    };
+
+    function fillFromExtract(obj){
+      if (obj.date) document.getElementById('wf-date').value = obj.date;
+      if (obj.weightKg!=null) document.getElementById('wf-weight').value = obj.weightKg;
+      if (obj.fatPercent!=null) document.getElementById('wf-fatpct').value = obj.fatPercent;
+      if (obj.fatKg!=null) document.getElementById('wf-fat').value = obj.fatKg;
+      if (obj.muscleKg!=null) document.getElementById('wf-muscle').value = obj.muscleKg;
+      if (obj.visceralFat!=null) document.getElementById('wf-visceral').value = obj.visceralFat;
+      if (obj.score!=null) document.getElementById('wf-score').value = obj.score;
+      if (obj.fatKg!=null || obj.muscleKg!=null || obj.visceralFat!=null || obj.score!=null){
+        document.getElementById('wf-inbody-fields').hidden = false;
+      }
+    }
+
+    if (aiAvailable){
+      var aiBtn = document.getElementById('wf-ai-btn');
+      var aiMsg = document.getElementById('wf-ai-msg');
+      aiBtn.onclick = function(){ document.getElementById('wf-ai-input').click(); };
+      document.getElementById('wf-ai-input').onchange = function(e){
+        var f = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (!f) return;
+        aiBtn.disabled = true;
+        aiMsg.style.color = 'var(--ink-faint)';
+        aiMsg.textContent = L('wf_aiRecognizing');
+        var prompt = 'This is a photo of an InBody body-composition scale report. Read the printed values and reply with ONLY this JSON object (no other text), using null for any field not visible on the report:\n' +
+          '{"date": "YYYY-MM-DD or null", "weightKg": number or null, "fatPercent": number or null (body fat %, PBF), "fatKg": number or null (body fat mass), "muscleKg": number or null (skeletal muscle mass, SMM), "visceralFat": number or null (visceral fat level), "score": number or null (InBody score)}';
+        sampleCap.json(prompt, {images:f, modelTier:'default', cache:false}).then(function(obj){
+          fillFromExtract(obj||{});
+          var gotAny = obj && (obj.weightKg!=null || obj.fatPercent!=null || obj.fatKg!=null || obj.muscleKg!=null);
+          aiMsg.style.color = gotAny ? 'var(--teal)' : 'var(--warn)';
+          aiMsg.textContent = gotAny ? L('wf_aiFilled') : L('wf_aiEmpty');
+        }).catch(function(err){
+          var code = err && err.code;
+          if (code==='not_granted' || code==='sampling_disabled' || code==='not_declared' || code==='capability_disabled' || code==='capability_removed' || code==='images_unavailable'){
+            aiBtn.style.display = 'none';
+            aiMsg.textContent = '';
+            return;
+          }
+          aiMsg.style.color = 'var(--warn)';
+          if (code==='image_rejected') aiMsg.textContent = L('wf_aiImageRejected');
+          else if (code==='rate_limited') aiMsg.textContent = L('wf_aiRateLimited');
+          else if (code==='cancelled') aiMsg.textContent = '';
+          else aiMsg.textContent = L('wf_aiUpstream');
+        }).finally(function(){ aiBtn.disabled = false; });
+      };
+    }
+
+    document.getElementById('wf-save').onclick = function(){
+      var v = +document.getElementById('wf-weight').value;
+      if (!v){ document.getElementById('wf-weight').focus(); return; }
+      function numOrNull(id){ var el = document.getElementById(id); return el.value ? +el.value : null; }
+      var rec = {
+        date: document.getElementById('wf-date').value || todayISO,
+        weightKg: v,
+        fatPercent: numOrNull('wf-fatpct'),
+        fatKg: numOrNull('wf-fat'),
+        muscleKg: numOrNull('wf-muscle'),
+        visceralFat: numOrNull('wf-visceral'),
+        score: numOrNull('wf-score')
+      };
+      addWeight(rec).then(function(){
+        closeSheet(); renderHome(); renderWeight();
+      });
+    };
+  }
+
+  function openInjectionForm(){
+    var rec = recommendedSite();
+    sheetBody.innerHTML =
+      '<div class="sheet-head"><h3>'+esc(L('sf_title'))+'</h3><button id="closeSheet">✕</button></div>' +
+      '<div class="field"><label>'+esc(L('sf_date'))+'</label><input type="date" id="sf-date" value="'+todayISO+'"></div>' +
+      '<div class="field-row">' +
+        '<div class="field"><label>'+esc(L('sf_dose'))+'</label><input type="number" inputmode="decimal" id="sf-dose" step="0.05" placeholder="'+esc(L('sf_dosePh'))+'"></div>' +
+        '<div class="field"><label>'+esc(L('sf_site'))+'</label><select id="sf-site">' +
+          SITES.map(function(s){ return '<option value="'+s.id+'"'+(s.id===rec?' selected':'')+'>'+esc(siteLabel(s.id))+(s.id===rec?esc(L('sf_recommended')):'')+'</option>'; }).join('') +
+        '</select></div>' +
+      '</div>' +
+      '<button class="btn primary block" id="sf-save">'+esc(L('sf_save'))+'</button>';
+    overlay.classList.add('open');
+    document.getElementById('closeSheet').onclick = closeSheet;
+    document.getElementById('sf-save').onclick = function(){
+      var dose = +document.getElementById('sf-dose').value;
+      if (!dose){ document.getElementById('sf-dose').focus(); return; }
+      var r = {
+        date: document.getElementById('sf-date').value || todayISO,
+        doseMg: dose,
+        site: document.getElementById('sf-site').value
+      };
+      addInjection(r).then(function(){
+        closeSheet(); renderHome(); renderShot();
+      });
+    };
+  }
+
+  /* ---------- AI analysis (Gemini, free web app — no API key stored in the page) ---------- */
+  function buildSummaryText(){
+    var p = mem.profile;
+    var genderText = p.gender==='female'?L('gender_female'):p.gender==='male'?L('gender_male'):L('gender_other');
+    var lines = [];
+    lines.push(L('ai_intro'));
+    lines.push('');
+    lines.push(L('ai_basicHeader'));
+    lines.push(L('ai_genderHeight',{gender:genderText, h:p.heightCm}));
+    lines.push(L('ai_startGoal',{start:fmtKg(p.startWeight), goal:fmtKg(p.goalWeight)}));
+    lines.push(L('ai_medCycle',{med:p.medication, days:p.intervalDays}));
+    lines.push('');
+    lines.push(L('ai_weightHeader'));
+    if (mem.weights.length){
+      mem.weights.slice().reverse().forEach(function(w){
+        lines.push(w.date + '  ' + fmtKg(w.weightKg) + '  ' + (w.fatPercent!=null?fmtKg(w.fatPercent):'-') + '  ' + (w.fatKg!=null?fmtKg(w.fatKg):'-') + '  ' + (w.muscleKg!=null?fmtKg(w.muscleKg):'-') + '  ' + (w.visceralFat!=null?w.visceralFat:'-') + '  ' + (w.score!=null?w.score:'-'));
+      });
+    } else { lines.push(L('ai_noRecords')); }
+    lines.push('');
+    lines.push(L('ai_shotHeader'));
+    if (mem.injections.length){
+      mem.injections.slice().reverse().forEach(function(r){
+        lines.push(r.date + '  ' + fmtKg(r.doseMg) + 'mg  ' + siteLabel(r.site));
+      });
+    } else { lines.push(L('ai_noRecords')); }
+    return lines.join('\n');
+  }
+
+  function fallbackCopy(text){
+    try{
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    }catch(e){ return false; }
+  }
+  function copyToClipboard(text){
+    return new Promise(function(resolve){
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){ resolve(true); }).catch(function(){ resolve(fallbackCopy(text)); });
+      } else {
+        resolve(fallbackCopy(text));
+      }
+    });
+  }
+
+  function openAISheet(){
+    var text = buildSummaryText();
+    sheetBody.innerHTML =
+      '<div class="sheet-head"><h3>'+esc(L('ai_title'))+'</h3><button id="closeSheet">✕</button></div>' +
+      '<div class="note" style="margin-bottom:10px">'+esc(L('ai_note'))+'</div>' +
+      '<div class="ai-preview">'+esc(text)+'</div>' +
+      '<div class="action-row" style="margin-top:12px">' +
+        '<button class="btn ghost" id="aiCopyBtn">'+esc(L('ai_copyBtn'))+'</button>' +
+        '<a class="btn primary" id="aiOpenBtn" href="https://gemini.google.com/app" target="_blank" rel="noopener">'+esc(L('ai_openBtn'))+'</a>' +
+      '</div>';
+    overlay.classList.add('open');
+    document.getElementById('closeSheet').onclick = closeSheet;
+    document.getElementById('aiCopyBtn').onclick = function(){
+      var btn = this;
+      copyToClipboard(text).then(function(ok){
+        btn.textContent = ok ? L('msg_copied') : L('msg_copyFailedManual');
+        setTimeout(function(){ btn.textContent = L('ai_copyBtn'); }, 1800);
+      });
+    };
+  }
+
+  /* ---------- nav / boot ---------- */
+  function switchView(name){
+    currentView = name;
+    document.querySelectorAll('.view').forEach(function(v){ v.classList.toggle('active', v.getAttribute('data-view')===name); });
+    document.querySelectorAll('nav.bottom button').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-nav')===name); });
+    document.getElementById('viewTitle').innerHTML = esc(L('title_'+name));
+    if (name==='home') renderHome();
+    if (name==='weight') renderWeight();
+    if (name==='shot') renderShot();
+    if (name==='settings') renderSettings();
+  }
+  document.getElementById('navBar').addEventListener('click', function(e){
+    var b = e.target.closest('[data-nav]');
+    if (b) switchView(b.getAttribute('data-nav'));
+  });
+
+  function updateNavLabels(){
+    document.getElementById('navLabelHome').textContent = L('nav_home');
+    document.getElementById('navLabelWeight').textContent = L('nav_weight');
+    document.getElementById('navLabelShot').textContent = L('nav_shot');
+    document.getElementById('navLabelSettings').textContent = L('nav_settings');
+  }
+
+  function updateDayBadge(){
+    var streak = mem.weights.length ? Math.max(1, daysBetween(mem.weights[0].date, todayISO)) : 1;
+    document.getElementById('dayBadge').textContent = L('dayBadge', {n:streak});
+  }
+
+  initPersistence().then(function(){
+    LANG = (mem.profile && mem.profile.lang) || 'zh';
+    updateNavLabels();
+    updateDayBadge();
+    switchView('home');
+  });
+})();
+</script>
+
+</html>
