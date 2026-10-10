@@ -5,7 +5,7 @@ GLP-1 注射與體重紀錄的個人網頁 App（純前端，沒有後端）。
 - 正式網址：https://zhenyaozhi-tracker.vercel.app
 - Vercel 專案：`zhenyaozhi-tracker`（帳號範圍 `johnny576707`）
 - 上線的檔案就是 `src/` 裡的四個檔：`index.html`、`style.css`、`i18n.js`（介面文字，中／英）、`app.js`。
-- 部署方式：把 `src/` 內的檔案放在部署的根目錄上傳到 Vercel（目前沒有連 Git 自動部署）。
+- 部署方式：已連 Git，推到 `main` 會自動部署到正式網址。Vercel 專案的 Root Directory 必須是 `src`，否則網站會 404。
 
 ## 資料
 
