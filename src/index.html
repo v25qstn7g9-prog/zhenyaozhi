@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>針藥誌</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="style.css?v=2">
+
+<div class="app" id="app">
+  <header class="top">
+    <button class="ai-pill" id="aiPill" type="button" aria-label="AI 健康分析"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5Z"/></svg>AI</button>
+    <div class="brand" id="viewTitle">針藥誌</div>
+    <div class="day-badge" id="dayBadge">第 1 天</div>
+  </header>
+
+  <main id="main">
+    <!-- HOME -->
+    <section class="view active" data-view="home" id="view-home"></section>
+    <!-- WEIGHT -->
+    <section class="view" data-view="weight" id="view-weight"></section>
+    <!-- INJECTION -->
+    <section class="view" data-view="shot" id="view-shot"></section>
+    <!-- SETTINGS -->
+    <section class="view" data-view="settings" id="view-settings"></section>
+  </main>
+
+  <nav class="bottom">
+    <div class="bar" id="navBar">
+      <button data-nav="home" class="active">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h4v-6h2v6h4a1 1 0 0 0 1-1v-9"/></svg>
+        <span id="navLabelHome">首頁</span>
+      </button>
+      <button data-nav="weight">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17 9 9l4 4 8-9"/></svg>
+        <span id="navLabelWeight">體重</span>
+      </button>
+      <button data-nav="shot">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m18 2 4 4-3 3-2-2-8 8 2 2-2 2-2-2-2 2-2-2 2-2-2-2 8-8-2-2Z"/><path d="m14 6 4 4"/></svg>
+        <span id="navLabelShot">注射</span>
+      </button>
+      <button data-nav="settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z"/></svg>
+        <span id="navLabelSettings">設定</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="sheet-overlay" id="sheetOverlay">
+    <div class="sheet" id="sheetBody"></div>
+  </div>
+</div>
+
+<script src="i18n.js?v=2"></script>
+<script src="app.js?v=2"></script>
+
+</html>
