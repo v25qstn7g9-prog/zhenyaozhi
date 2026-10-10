@@ -40,7 +40,8 @@
   var mem = {
     profile: null,
     weights: [],
-    injections: []
+    injections: [],
+    meals: []   // added 2026-10: diet log; older saves simply have none
   };
   var LS_KEY = 'zhenyaozhi.records.v1';
   var persistMode = 'memory'; // 'local' | 'memory'
@@ -83,7 +84,7 @@
   function writeLocalStorage(){
     if (persistMode!=='local') return false;
     try{
-      localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections}));
+      localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals}));
       return true;
     }catch(e){ return false; }
   }
@@ -101,6 +102,7 @@
       mem.profile = Object.assign(defaultProfile(), saved.profile, {seeded:false});
       mem.weights = saved.weights;
       mem.injections = saved.injections;
+      mem.meals = Array.isArray(saved.meals) ? saved.meals : [];
     } else {
       var seed = seedDemoData();
       mem.profile = defaultProfile();
@@ -148,13 +150,15 @@
     writeLocalStorage();
   }
   async function clearAllData(){
-    mem.weights = []; mem.injections = [];
+    mem.weights = []; mem.injections = []; mem.meals = [];
     writeLocalStorage();
   }
   async function restoreFromBackup(obj){
     mem.profile = Object.assign(defaultProfile(), mem.profile, obj.profile||{}, {seeded:false});
     mem.weights = obj.weights.map(function(w){ return Object.assign({}, w, {id:w.id||uuid()}); });
     mem.injections = obj.injections.map(function(r){ return Object.assign({}, r, {id:r.id||uuid()}); });
+    // Backups made before the diet page have no meals: keep what is on this phone instead of wiping it.
+    if (Array.isArray(obj.meals)) mem.meals = obj.meals.map(function(m){ return Object.assign({}, m, {id:m.id||uuid()}); });
     sortData();
     writeLocalStorage();
   }
@@ -162,7 +166,7 @@
   /* ---------- backup / restore (export file or text, re-import) ---------- */
   function buildBackupObject(){
     return {app:'zhenyaozhi', version:1, exportedAt:new Date().toISOString(),
-      profile:mem.profile, weights:mem.weights, injections:mem.injections};
+      profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals};
   }
   function backupJSONText(){ return JSON.stringify(buildBackupObject(), null, 2); }
   function parseBackupText(text){
@@ -301,6 +305,7 @@
 
   /* ---------- helpers ---------- */
   function fmtKg(n){ return (Math.round(n*10)/10).toFixed(1); }
+  function kgShort(n){ return fmtKg(n).replace(/\.0$/,''); }
   // Doses need two decimals (0.25 mg must not show as 0.3); trailing zeros dropped.
   function fmtDose(n){ return String(Math.round(n*1000)/1000); }
   function fmtMD(iso){ var p=iso.split('-'); return p[1]+'/'+p[2]; }
@@ -465,6 +470,9 @@
     plus:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     share:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
     trash:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>',
+    camera:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="14" r="3.5"/></svg>',
+    chat:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/></svg>',
+    edit:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     down:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 9v8H9"/></svg>'
   };
   function exportShortcut(btn){
@@ -497,10 +505,11 @@
       '<div class="hero">' +
         '<div class="cd-chip'+(cd<0?' overdue':'')+'"><b>'+Math.abs(cd)+'</b><small>'+esc(L('days_unit'))+'</small><div>'+esc(cd<0?L('home_overdueShort'):L('home_cdShort'))+'</div></div>' +
         '<div class="eyebrow">'+ICON.down+esc(L('home_lost'))+'</div>' +
-        '<div class="big">'+ (lost>=0?'−':'+') + fmtKg(Math.abs(lost)) + '<span>kg</span></div>' +
+        '<div class="big">'+ (lost>=0?'−':'+') + kgShort(Math.abs(lost)) + '<span>kg</span></div>' +
         '<div class="sub">' + esc(lost>0.05 ? L('home_cheer') : L('home_cheerStart')) + '</div>' +
         '<div class="bar"><i style="width:'+pct.toFixed(0)+'%"></i></div>' +
-        '<div class="bar-labels"><span>'+fmtKg(mem.profile.startWeight)+'kg</span><span>'+esc(L('home_toGoal',{x:fmtKg(goalDist)}))+'</span><span>'+fmtKg(mem.profile.goalWeight)+'kg</span></div>' +
+        '<div class="bar-labels"><span>'+kgShort(mem.profile.startWeight)+'kg</span><span>'+esc(L('home_toGoal',{x:kgShort(goalDist)}))+'</span><span>'+kgShort(mem.profile.goalWeight)+'kg</span></div>' +
+        '<img class="hero-cat" src="cat.webp?v=1" alt="" aria-hidden="true" onerror="this.remove()">' +
       '</div>' +
       '<div class="card">' +
         '<h2>'+esc(L('home_trendTitle'))+'</h2>' +
@@ -998,6 +1007,240 @@
     };
   }
 
+
+  /* ---------- diet (飲食) ---------- */
+  var dietDate = todayISO;
+  var MEAL_KEYS = ['breakfast','lunch','dinner','snack'];
+  var MEAL_ICON = {breakfast:'🌅', lunch:'☀️', dinner:'🌙', snack:'🍪'};
+  function kcalTarget(){ var t = +mem.profile.kcalTarget; return t>=800 && t<=5000 ? t : 1500; }
+  // Macro targets follow a common split: protein 24%, carbs 51%, fat 25% of calories; fibre 14 g per 1000 kcal.
+  function macroTargets(){
+    var k = kcalTarget();
+    return {protein:Math.round(k*0.24/4), carbs:Math.round(k*0.51/4), fat:Math.round(k*0.25/9), fiber:Math.round(k/1000*14)};
+  }
+  function mealsOn(date){ return mem.meals.filter(function(m){ return m.date===date; }); }
+  function sumMeals(list){
+    return list.reduce(function(a,m){ a.kcal+=+m.kcal||0; a.protein+=+m.protein||0; a.carbs+=+m.carbs||0; a.fat+=+m.fat||0; a.fiber+=+m.fiber||0; return a; }, {kcal:0,protein:0,carbs:0,fat:0,fiber:0});
+  }
+  function defaultMeal(){ var h = new Date().getHours(); return h<10?'breakfast':h<15?'lunch':h<21?'dinner':'snack'; }
+  function addMeals(list){ list.forEach(function(m){ m.id = uuid(); mem.meals.push(m); }); writeLocalStorage(); }
+  function deleteMeal(id){ mem.meals = mem.meals.filter(function(m){ return m.id!==id; }); writeLocalStorage(); }
+  function isoShift(iso, days){ var d = new Date(iso+'T00:00:00'); d.setDate(d.getDate()+days); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+  function r1(n){ return String(Math.round(n*10)/10); }
+
+  function dietTips(sum, tg){
+    var tips = [];
+    var leftP = tg.protein - sum.protein, leftK = kcalTarget() - sum.kcal;
+    if (!mealsOn(dietDate).length) tips.push(L('tip_start'));
+    if (leftP > 25) tips.push(L('tip_protein',{g:Math.round(leftP)}));
+    if (sum.fiber < tg.fiber*0.5 && sum.kcal > 300) tips.push(L('tip_fiber'));
+    if (leftK < 0) tips.push(L('tip_over',{k:Math.round(-leftK)}));
+    else if (sum.kcal > 0 && leftK < 300) tips.push(L('tip_close'));
+    if (sum.fat > tg.fat*1.1) tips.push(L('tip_fat'));
+    tips.push(L('tip_glp1'));
+    return tips.slice(0,3);
+  }
+
+  function renderDiet(){
+    var tg = macroTargets(), k = kcalTarget();
+    var list = mealsOn(dietDate), sum = sumMeals(list);
+    var left = k - sum.kcal, pct = Math.min(100, Math.max(0, sum.kcal/k*100));
+    var circ = 2*Math.PI*42;
+    // week strip (Sun–Sat) containing the selected day
+    var d0 = new Date(dietDate+'T00:00:00'); var sun = isoShift(dietDate, -d0.getDay());
+    var days = '';
+    for (var i=0;i<7;i++){
+      var iso = isoShift(sun, i), on = iso===dietDate, has = mealsOn(iso).length>0;
+      days += '<button class="wk-day'+(on?' on':'')+(has?' has':'')+(iso===todayISO?' today':'')+'" data-day="'+iso+'"><small>'+DOW[LANG][i]+'</small><b>'+(+iso.slice(8,10))+'</b></button>';
+    }
+    var bars = [['protein','🍗'],['carbs','🍞'],['fiber','🥦'],['fat','🥑']].map(function(x){
+      var key = x[0], v = sum[key], t = tg[key], w = Math.min(100, t? v/t*100 : 0);
+      return '<div class="mac"><div class="mac-row"><span>'+x[1]+' '+esc(L('mac_'+key))+'</span><span class="num"><b>'+r1(v)+'</b> / '+t+'g</span></div><div class="mac-bar"><i style="width:'+w.toFixed(0)+'%"></i></div></div>';
+    }).join('');
+    var sections = MEAL_KEYS.map(function(mk){
+      var items = list.filter(function(m){ return m.meal===mk; });
+      var s = sumMeals(items);
+      return '<div class="card meal-card">' +
+        '<div class="meal-head"><span>'+MEAL_ICON[mk]+' <b>'+esc(L('meal_'+mk))+'</b>'+(items.length?' <small class="num">'+Math.round(s.kcal)+' kcal</small>':'')+'</span><button class="link-btn" data-add-meal="'+mk+'">＋ '+esc(L('diet_add'))+'</button></div>' +
+        items.map(function(m){
+          return '<div class="food-row"><div><div class="food-name">'+esc(m.name)+(m.portion?' <small>'+esc(m.portion)+'</small>':'')+'</div>' +
+            '<div class="food-mac">'+esc(L('mac_protein'))+' '+r1(+m.protein||0)+'g · '+esc(L('mac_carbs'))+' '+r1(+m.carbs||0)+'g · '+esc(L('mac_fat'))+' '+r1(+m.fat||0)+'g</div></div>' +
+            '<div class="food-kcal num">'+Math.round(+m.kcal||0)+'<small>kcal</small></div>' +
+            '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-meal="'+m.id+'">'+ICON.trash+'</button></div>';
+        }).join('') +
+      '</div>';
+    }).join('');
+    var dl = new Date(dietDate+'T00:00:00');
+    var dateLabel = LANG==='en' ? (MONTHS_EN[dl.getMonth()]+' '+dl.getDate()) : ((dl.getMonth()+1)+'月'+dl.getDate()+'日'+L('dow_paren',{d:DOW.zh[dl.getDay()]}));
+
+    document.getElementById('view-diet').innerHTML =
+      '<div class="card">' +
+        '<div class="cal-head"><div class="m-label">'+esc(dateLabel)+'</div><div class="cal-nav"><button data-wk="-7" aria-label="prev">‹</button><button data-wk="7" aria-label="next">›</button></div></div>' +
+        '<div class="wk-strip">'+days+'</div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<div class="diet-sum">' +
+          '<div class="ring-wrap"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="42" fill="none" stroke="var(--surface-2)" stroke-width="10"/>' +
+            '<circle cx="50" cy="50" r="42" fill="none" stroke="'+(left<0?'var(--warn)':'var(--accent-deep)')+'" stroke-width="10" stroke-linecap="round" stroke-dasharray="'+(circ*pct/100).toFixed(1)+' '+circ.toFixed(1)+'" transform="rotate(-90 50 50)"/></svg>' +
+            '<div class="ring-val"><b class="'+(left<0?'over':'')+'">'+Math.abs(Math.round(left))+'</b><small>'+esc(left<0?L('diet_over'):L('diet_left'))+'</small></div></div>' +
+          '<div class="macs">'+bars+'</div>' +
+        '</div>' +
+        '<div class="diet-foot"><button class="link-btn" id="editTarget">'+esc(L('diet_target'))+' <b class="num">'+k+'</b> kcal ✎</button><span>'+esc(L('diet_eaten'))+' <b class="num">'+Math.round(sum.kcal)+'</b> kcal · '+Math.round(pct)+'%</span></div>' +
+      '</div>' +
+      '<div class="action-row">' +
+        '<button class="btn" id="foodText">'+ICON.chat+esc(L('diet_text'))+'</button>' +
+        '<button class="btn primary" id="foodPhoto">'+ICON.camera+esc(L('diet_photo'))+'</button>' +
+        '<button class="btn icon-only" id="foodManual" aria-label="'+esc(L('diet_manual'))+'">'+ICON.edit+'</button>' +
+      '</div>' +
+      '<div class="card tips-card"><h2>'+esc(L('diet_tipsTitle'))+'</h2><ul class="tips">'+dietTips(sum, tg).map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('')+'</ul></div>' +
+      sections;
+
+    document.querySelectorAll('[data-day]').forEach(function(b){ b.onclick = function(){ dietDate = this.getAttribute('data-day'); renderDiet(); }; });
+    document.querySelectorAll('[data-wk]').forEach(function(b){ b.onclick = function(){ dietDate = isoShift(dietDate, +this.getAttribute('data-wk')); renderDiet(); }; });
+    document.querySelectorAll('[data-add-meal]').forEach(function(b){ b.onclick = function(){ openFoodSheet('photo', this.getAttribute('data-add-meal')); }; });
+    document.querySelectorAll('[data-del-meal]').forEach(function(b){ b.onclick = function(){ deleteMeal(this.getAttribute('data-del-meal')); renderDiet(); }; });
+    document.getElementById('foodText').onclick = function(){ openFoodSheet('text'); };
+    document.getElementById('foodPhoto').onclick = function(){ openFoodSheet('photo'); };
+    document.getElementById('foodManual').onclick = function(){ openFoodSheet('manual'); };
+    document.getElementById('editTarget').onclick = function(){
+      var v = window.prompt(L('diet_targetPrompt'), String(k));
+      if (v==null) return;
+      var n = Math.round(+v);
+      if (n>=800 && n<=5000){ saveProfile({kcalTarget:n}).then(renderDiet); }
+    };
+  }
+
+  // Shrink a photo to max 1024px JPEG so it uploads fast and stays far under Vercel's request limit.
+  function photoToDataURL(file){
+    return new Promise(function(resolve, reject){
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function(){
+        var s = Math.min(1, 1024/Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width*s); c.height = Math.round(img.height*s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('image')); };
+      img.src = url;
+    });
+  }
+  function estimateFood(payload){
+    var ctl = new AbortController(); var t = setTimeout(function(){ ctl.abort(); }, 45000);
+    return fetch('/api/food', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload), signal:ctl.signal})
+      .then(function(r){ return r.json().catch(function(){ return {ok:false, error:'http_'+r.status}; }); })
+      .catch(function(e){ return {ok:false, error: e && e.name==='AbortError' ? 'timeout' : 'network'}; })
+      .finally(function(){ clearTimeout(t); });
+  }
+  function aiErrorText(res){
+    var map = {not_configured:L('ai_err_key'), rate_limited:L('ai_err_rate'), invalid_image:L('ai_err_image'), timeout:L('ai_err_timeout'), network:L('ai_err_network')};
+    return map[res.error] || (L('ai_err_other') + (res.reason ? '（'+res.reason+'）' : res.error ? '（'+res.error+'）' : ''));
+  }
+
+  function openFoodSheet(mode, meal){
+    meal = meal || defaultMeal();
+    var pending = []; // items waiting for confirmation
+    function itemsHTML(){
+      if (!pending.length) return '';
+      var tot = sumMeals(pending);
+      return '<div class="est-list">' + pending.map(function(it, i){
+        return '<div class="est-item"><div class="est-top"><input class="est-name" data-i="'+i+'" data-k="name" value="'+esc(it.name)+'">' +
+          '<button class="icon-btn" data-rm="'+i+'" aria-label="'+esc(L('a11y_delete'))+'">'+ICON.trash+'</button></div>' +
+          (it.portion?'<div class="est-portion">'+esc(it.portion)+'</div>':'') +
+          '<div class="est-nums">' + ['kcal','protein','carbs','fat','fiber'].map(function(k){
+            return '<label><span>'+esc(k==='kcal'?'kcal':L('mac_'+k))+'</span><input type="number" inputmode="decimal" data-i="'+i+'" data-k="'+k+'" value="'+(+it[k]||0)+'"></label>';
+          }).join('') + '</div></div>';
+      }).join('') + '<div class="est-total">'+esc(L('diet_total'))+' <b class="num">'+Math.round(tot.kcal)+'</b> kcal</div></div>' +
+      '<button class="btn primary block" id="fs-save">'+esc(L('diet_saveItems',{n:pending.length}))+'</button>';
+    }
+    function draw(){
+      var seg = '<div class="seg" id="fs-meal">'+MEAL_KEYS.map(function(mk){ return '<button data-meal="'+mk+'" class="'+(meal===mk?'active':'')+'">'+esc(L('meal_'+mk))+'</button>'; }).join('')+'</div>';
+      var body = '';
+      if (mode==='photo'){
+        body = '<input type="file" id="fs-file" accept="image/*" capture="environment" hidden><input type="file" id="fs-album" accept="image/*" hidden>' +
+          '<div class="photo-pick"><button class="btn primary" id="fs-cam">'+ICON.camera+esc(L('diet_takePhoto'))+'</button><button class="btn" id="fs-alb">'+esc(L('diet_album'))+'</button></div>' +
+          '<div id="fs-preview"></div>' +
+          '<div class="field"><label>'+esc(L('diet_photoHint'))+'</label><input id="fs-hint" placeholder="'+esc(L('diet_photoHintPh'))+'"></div>';
+      } else if (mode==='text'){
+        body = '<div class="field"><label>'+esc(L('diet_textLabel'))+'</label><textarea id="fs-text" rows="3" placeholder="'+esc(L('diet_textPh'))+'"></textarea></div>' +
+          '<button class="btn primary block" id="fs-est">'+esc(L('diet_estimate'))+'</button>';
+      } else {
+        body = '<div class="field"><label>'+esc(L('diet_foodName'))+'</label><input id="fm-name" placeholder="'+esc(L('diet_foodNamePh'))+'"></div>' +
+          '<div class="field-row"><div class="field"><label>kcal</label><input id="fm-kcal" type="number" inputmode="decimal"></div><div class="field"><label>'+esc(L('mac_protein'))+' (g)</label><input id="fm-protein" type="number" inputmode="decimal"></div></div>' +
+          '<div class="field-row"><div class="field"><label>'+esc(L('mac_carbs'))+' (g)</label><input id="fm-carbs" type="number" inputmode="decimal"></div><div class="field"><label>'+esc(L('mac_fat'))+' (g)</label><input id="fm-fat" type="number" inputmode="decimal"></div><div class="field"><label>'+esc(L('mac_fiber'))+' (g)</label><input id="fm-fiber" type="number" inputmode="decimal"></div></div>' +
+          '<button class="btn primary block" id="fm-save">'+esc(L('wf_save'))+'</button>';
+      }
+      sheetBody.innerHTML =
+        '<div class="sheet-head"><h3>'+esc(L(mode==='photo'?'diet_photo':mode==='text'?'diet_text':'diet_manual'))+'</h3><button id="closeSheet">✕</button></div>' +
+        seg + '<div style="height:14px"></div>' + body +
+        '<div class="note" id="fs-msg" style="margin:10px 0;min-height:14px"></div>' +
+        '<div id="fs-items">'+itemsHTML()+'</div>' +
+        '<div class="note">'+esc(L('diet_disclaimer'))+'</div>';
+      bind();
+    }
+    function msg(t, bad){ var el = document.getElementById('fs-msg'); el.textContent = t||''; el.style.color = bad ? 'var(--warn)' : 'var(--ink-faint)'; }
+    function refreshItems(){ document.getElementById('fs-items').innerHTML = itemsHTML(); bindItems(); }
+    function bindItems(){
+      document.querySelectorAll('#fs-items [data-k]').forEach(function(inp){
+        inp.oninput = function(){ var i = +this.getAttribute('data-i'), k = this.getAttribute('data-k'); pending[i][k] = k==='name' ? this.value : (+this.value||0);
+          if (k!=='name'){ var tot = document.querySelector('.est-total b'); if (tot) tot.textContent = Math.round(sumMeals(pending).kcal); } };
+      });
+      document.querySelectorAll('#fs-items [data-rm]').forEach(function(b){ b.onclick = function(){ pending.splice(+this.getAttribute('data-rm'),1); refreshItems(); }; });
+      var sv = document.getElementById('fs-save');
+      if (sv) sv.onclick = function(){
+        var keep = pending.filter(function(it){ return String(it.name).trim(); }).map(function(it){
+          return {date:dietDate, meal:meal, name:String(it.name).trim(), portion:it.portion||'', kcal:+it.kcal||0, protein:+it.protein||0, carbs:+it.carbs||0, fat:+it.fat||0, fiber:+it.fiber||0, source:mode};
+        });
+        if (!keep.length) return;
+        addMeals(keep); closeSheet(); renderDiet();
+      };
+    }
+    function handleResult(res){
+      if (!res.ok){ msg(aiErrorText(res), true); return; }
+      if (!res.items || !res.items.length){ msg(res.note || L('ai_err_none'), true); return; }
+      pending = res.items; msg(res.note ? (L('diet_aiDone')+' '+res.note) : L('diet_aiDone')); refreshItems();
+    }
+    function bind(){
+      document.getElementById('closeSheet').onclick = closeSheet;
+      document.querySelectorAll('#fs-meal button').forEach(function(b){ b.onclick = function(){ meal = this.getAttribute('data-meal'); document.querySelectorAll('#fs-meal button').forEach(function(x){ x.classList.toggle('active', x.getAttribute('data-meal')===meal); }); }; });
+      bindItems();
+      if (mode==='photo'){
+        var onFile = function(e){
+          var f = e.target.files && e.target.files[0]; e.target.value = '';
+          if (!f) return;
+          msg(L('diet_reading'));
+          photoToDataURL(f).then(function(data){
+            document.getElementById('fs-preview').innerHTML = '<img class="food-shot" src="'+data+'" alt="">';
+            return estimateFood({image:data, text:(document.getElementById('fs-hint')||{}).value||''});
+          }).then(handleResult).catch(function(){ msg(L('ai_err_image'), true); });
+        };
+        document.getElementById('fs-file').onchange = onFile;
+        document.getElementById('fs-album').onchange = onFile;
+        document.getElementById('fs-cam').onclick = function(){ document.getElementById('fs-file').click(); };
+        document.getElementById('fs-alb').onclick = function(){ document.getElementById('fs-album').click(); };
+      } else if (mode==='text'){
+        document.getElementById('fs-est').onclick = function(){
+          var t = document.getElementById('fs-text').value.trim();
+          if (!t){ document.getElementById('fs-text').focus(); return; }
+          var btn = this; btn.disabled = true; msg(L('diet_reading'));
+          estimateFood({text:t}).then(handleResult).finally(function(){ btn.disabled = false; });
+        };
+      } else {
+        document.getElementById('fm-save').onclick = function(){
+          var name = document.getElementById('fm-name').value.trim();
+          var kcal = +document.getElementById('fm-kcal').value;
+          if (!name){ document.getElementById('fm-name').focus(); return; }
+          if (!(kcal>=0)) kcal = 0;
+          function n(id){ return +document.getElementById(id).value || 0; }
+          addMeals([{date:dietDate, meal:meal, name:name, portion:'', kcal:kcal, protein:n('fm-protein'), carbs:n('fm-carbs'), fat:n('fm-fat'), fiber:n('fm-fiber'), source:'manual'}]);
+          closeSheet(); renderDiet();
+        };
+      }
+    }
+    draw();
+    overlay.classList.add('open');
+  }
+
   /* ---------- AI analysis (Gemini, free web app — no API key stored in the page) ---------- */
   function buildSummaryText(){
     var p = mem.profile;
@@ -1081,6 +1324,7 @@
     if (name==='home') renderHome();
     if (name==='weight') renderWeight();
     if (name==='shot') renderShot();
+    if (name==='diet') renderDiet();
     if (name==='settings') renderSettings();
   }
   document.getElementById('aiPill').onclick = function(){ openAISheet(); };
@@ -1093,6 +1337,7 @@
     document.getElementById('navLabelHome').textContent = L('nav_home');
     document.getElementById('navLabelWeight').textContent = L('nav_weight');
     document.getElementById('navLabelShot').textContent = L('nav_shot');
+    document.getElementById('navLabelDiet').textContent = L('nav_diet');
     document.getElementById('navLabelSettings').textContent = L('nav_settings');
   }
 
