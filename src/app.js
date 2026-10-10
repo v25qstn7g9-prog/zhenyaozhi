@@ -206,16 +206,40 @@
     }catch(e){}
     return null;
   }
+  // Real file on the live site: phones get the share sheet (儲存到「檔案」、LINE、Email…),
+  // computers get a normal download; copying the text is only the last resort.
+  function backupFileName(){ return 'zhenyaozhi-backup-'+todayISO+'.json'; }
+  function downloadBlob(blob, name){
+    var url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
   async function exportBackupFile(){
     var text = backupJSONText();
     if (downloadsCap){
       try{
-        await downloadsCap.save({filename:'針藥誌備份_'+todayISO+'.json', data:text});
+        await downloadsCap.save({filename:backupFileName(), data:text});
         return {ok:true, mode:'file'};
-      }catch(e){ /* fall through to clipboard */ }
+      }catch(e){ /* fall through */ }
     }
+    var name = backupFileName();
+    var blob = new Blob([text], {type:'application/json'});
+    var coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+    if (coarse && typeof File==='function' && navigator.canShare){
+      var file = new File([blob], name, {type:'application/json'});
+      if (navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file], title:name}); return {ok:true, mode:'share'}; }
+        catch(e){ if (e && e.name==='AbortError') return {ok:false, mode:'cancelled'}; }
+      }
+    }
+    try{ downloadBlob(blob, name); return {ok:true, mode:'file'}; }
+    catch(e){ /* fall through */ }
     var copied = await copyToClipboard(text);
     return {ok:copied, mode:'clipboard'};
+  }
+  function backupCounts(obj){
+    return {w:obj.weights.length, s:obj.injections.length,
+      m:Array.isArray(obj.meals)?obj.meals.length:0, p:Array.isArray(obj.purchases)?obj.purchases.length:0};
   }
   function confirmInline(msgEl, message, confirmLabel, onConfirm){
     msgEl.innerHTML = esc(message) + ' <button class="btn small danger" id="__confirmBtn" type="button">'+esc(confirmLabel)+'</button>';
@@ -853,7 +877,7 @@
           '<button class="btn ghost" id="exportCopyBtn">'+esc(L('settings_exportCopy'))+'</button>' +
         '</div>' +
         '<div style="height:16px"></div>' +
-        '<input type="file" id="importFileInput" accept="application/json,.json" hidden>' +
+        '<input type="file" id="importFileInput" accept=".json,application/json,text/plain,.txt" hidden>' +
         '<button class="btn block" id="importFileBtn">'+esc(L('settings_importFile'))+'</button>' +
         '<div style="height:12px"></div>' +
         '<div class="field"><label>'+esc(L('settings_importPasteLabel'))+'</label><textarea id="importPaste" rows="4" placeholder="'+esc(L('settings_importPastePh'))+'"></textarea></div>' +
@@ -904,13 +928,15 @@
       saveProfile({remindersOn: !mem.profile.remindersOn}).then(renderSettings);
     };
 
+    // The settings page is redrawn after a restore, so the message goes on the new element.
+    function showBackupMsg(t){ var el = document.getElementById('backupMsg'); if (el){ el.style.color='var(--teal)'; el.textContent=t; } }
     function refreshAll(){ renderHome(); renderWeight(); renderShot(); renderLedger(); }
 
     document.getElementById('exportFileBtn').onclick = function(){
       var btn = this, orig = btn.textContent;
       btn.textContent = L('msg_processing');
       exportBackupFile().then(function(res){
-        btn.textContent = !res.ok ? L('msg_exportFailed') : (res.mode==='file' ? L('msg_exportedFile') : L('msg_exportedClipboard'));
+        btn.textContent = res.mode==='cancelled' ? orig : !res.ok ? L('msg_exportFailed') : (res.mode==='share' ? L('msg_exportedShare') : res.mode==='file' ? L('msg_exportedFile') : L('msg_exportedClipboard'));
         setTimeout(function(){ btn.textContent = orig; }, 2200);
       });
     };
@@ -933,11 +959,11 @@
         var obj = parseBackupText(String(reader.result));
         e.target.value = '';
         if (!obj){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badFile'); return; }
-        confirmInline(msg, L('msg_detected',{w:obj.weights.length, s:obj.injections.length}), L('msg_confirmRestore'), function(){
+        confirmInline(msg, L('msg_detected',backupCounts(obj)), L('msg_confirmRestore'), function(){
           restoreFromBackup(obj).then(function(){
             LANG = mem.profile.lang || LANG;
-            msg.style.color='var(--teal)'; msg.textContent=L('msg_restored');
             updateNavLabels(); updateDayBadge(); refreshAll(); renderSettings();
+            showBackupMsg(L('msg_restored',backupCounts(mem)));
           });
         });
       };
@@ -949,11 +975,11 @@
       if (!text){ msg.style.color='var(--warn)'; msg.textContent=L('msg_pasteFirst'); return; }
       var obj = parseBackupText(text);
       if (!obj){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badText'); return; }
-      confirmInline(msg, L('msg_detected',{w:obj.weights.length, s:obj.injections.length}), L('msg_confirmRestore'), function(){
+      confirmInline(msg, L('msg_detected',backupCounts(obj)), L('msg_confirmRestore'), function(){
         restoreFromBackup(obj).then(function(){
           LANG = mem.profile.lang || LANG;
-          msg.style.color='var(--teal)'; msg.textContent=L('msg_restored');
           updateNavLabels(); updateDayBadge(); refreshAll(); renderSettings();
+          showBackupMsg(L('msg_restored',backupCounts(mem)));
         });
       });
     };
