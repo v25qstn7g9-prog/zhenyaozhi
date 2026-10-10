@@ -872,16 +872,11 @@
       '<div class="card">' +
         '<h2>'+esc(L('settings_backupTitle'))+'</h2>' +
         '<div class="note" style="margin-bottom:10px">'+esc(persistMode==='local' ? L('settings_backupNoteLocal') : L('settings_backupNoteMemory'))+esc(L('settings_backupTail'))+'</div>' +
+        '<input type="file" id="importFileInput" accept=".json,application/json,text/plain,.txt" hidden>' +
         '<div class="action-row">' +
           '<button class="btn primary" id="exportFileBtn">'+esc(L('settings_exportFile'))+'</button>' +
-          '<button class="btn ghost" id="exportCopyBtn">'+esc(L('settings_exportCopy'))+'</button>' +
+          '<button class="btn" id="importFileBtn">'+esc(L('settings_importFile'))+'</button>' +
         '</div>' +
-        '<div style="height:16px"></div>' +
-        '<input type="file" id="importFileInput" accept=".json,application/json,text/plain,.txt" hidden>' +
-        '<button class="btn block" id="importFileBtn">'+esc(L('settings_importFile'))+'</button>' +
-        '<div style="height:12px"></div>' +
-        '<div class="field"><label>'+esc(L('settings_importPasteLabel'))+'</label><textarea id="importPaste" rows="4" placeholder="'+esc(L('settings_importPastePh'))+'"></textarea></div>' +
-        '<button class="btn teal block" id="importPasteBtn">'+esc(L('settings_importPasteBtn'))+'</button>' +
         '<div class="note" id="backupMsg" style="margin-top:10px;min-height:14px"></div>' +
       '</div>' +
       '<div class="card">' +
@@ -940,13 +935,6 @@
         setTimeout(function(){ btn.textContent = orig; }, 2200);
       });
     };
-    document.getElementById('exportCopyBtn').onclick = function(){
-      var btn = this;
-      copyToClipboard(backupJSONText()).then(function(ok){
-        btn.textContent = ok ? L('msg_copied') : L('msg_copyFailedDownload');
-        setTimeout(function(){ btn.textContent = L('settings_exportCopy'); }, 1800);
-      });
-    };
     document.getElementById('importFileBtn').onclick = function(){
       document.getElementById('importFileInput').click();
     };
@@ -968,20 +956,6 @@
         });
       };
       reader.readAsText(f, 'utf-8');
-    };
-    document.getElementById('importPasteBtn').onclick = function(){
-      var msg = document.getElementById('backupMsg');
-      var text = document.getElementById('importPaste').value.trim();
-      if (!text){ msg.style.color='var(--warn)'; msg.textContent=L('msg_pasteFirst'); return; }
-      var obj = parseBackupText(text);
-      if (!obj){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badText'); return; }
-      confirmInline(msg, L('msg_detected',backupCounts(obj)), L('msg_confirmRestore'), function(){
-        restoreFromBackup(obj).then(function(){
-          LANG = mem.profile.lang || LANG;
-          updateNavLabels(); updateDayBadge(); refreshAll(); renderSettings();
-          showBackupMsg(L('msg_restored',backupCounts(mem)));
-        });
-      });
     };
     document.getElementById('inbodyImportBtn').onclick = function(){
       document.getElementById('inbodyFileInput').click();
