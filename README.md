@@ -7,9 +7,15 @@ GLP-1 注射與體重紀錄的個人網頁 App（純前端，沒有後端）。
 - 上線的檔案就是 `src/` 裡的四個檔：`index.html`、`style.css`、`i18n.js`（介面文字，中／英）、`app.js`。
 - 部署方式：已連 Git，推到 `main` 會自動部署到正式網址。Vercel 專案的 Root Directory 必須是 `src`，否則網站會 404。
 
+## 飲食頁的 AI 估算
+
+- `src/api/food.js` 是唯一的後端（Vercel Function，路徑 `/api/food`）：收照片或文字，交給 Gemini 估算每樣食物的熱量與蛋白質／碳水／脂肪／纖維。
+- 需要在 Vercel 專案設定環境變數 `GEMINI_API_KEY`（可選 `GEMINI_MODEL`，預設 `gemini-3.6-flash`）。沒設時頁面會提示改用手動輸入。
+- 只接受同網域呼叫，每個 IP 每小時 30 次（單一伺服器實例內計算）。照片不會存起來，只存估算出的文字和數字。
+
 ## 資料
 
-- 全部存在使用者手機瀏覽器的 localStorage，key 是 `zhenyaozhi.records.v1`，格式 `{profile, weights, injections}`。
+- 全部存在使用者手機瀏覽器的 localStorage，key 是 `zhenyaozhi.records.v1`，格式 `{profile, weights, injections, meals}`。`meals` 是 2026-10 新增的，舊資料沒有這欄會當成空清單；`profile.kcalTarget` 是每日熱量目標（預設 1500）。
 - 改版時不要改這個 key 或欄位，否則手機裡的舊紀錄會讀不到。要改格式前先請使用者在「設定 → 下載備份檔」匯出備份。
 
 ## 歷史
