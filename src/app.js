@@ -32,7 +32,8 @@
   // Medicines and their standard pen strengths (mg). Anything else is entered as 自訂.
   var MEDS = { mounjaro:[2.5,5,7.5,10,12.5,15], wegovy:[0.25,0.5,1,1.7,2.4] };
   var MED_LABELS = { zh:{mounjaro:'猛健樂', wegovy:'週纖達'}, en:{mounjaro:'Mounjaro', wegovy:'Wegovy'} };
-  var DOW = { zh:['日','一','二','三','四','五','六'], en:['S','M','T','W','T','F','S'] };
+  var DOW = { zh:['日','一','二','三','四','五','六'], en:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] };
+  var MONTHS_EN_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var todayISO = new Date().toISOString().slice(0,10);
 
@@ -49,7 +50,7 @@
     return (SITE_LABELS[LANG] && SITE_LABELS[LANG][id]) || SITE_LABELS.zh[id] || id;
   }
   function monthLabel(y, m){
-    return LANG==='en' ? (MONTHS_EN[m] + ' ' + y) : (y + ' 年 ' + (m+1) + ' 月');
+    return LANG==='en' ? (MONTHS_EN[m] + ' ' + y) : (y + '年' + (m+1) + '月');
   }
 
   /* ---------- tiny state / persistence (per-device localStorage) ---------- */
@@ -240,9 +241,11 @@
       m:Array.isArray(obj.meals)?obj.meals.length:0, p:Array.isArray(obj.purchases)?obj.purchases.length:0};
   }
   function confirmInline(msgEl, message, confirmLabel, onConfirm){
-    msgEl.innerHTML = esc(message) + ' <button class="btn small danger" id="__confirmBtn" type="button">'+esc(confirmLabel)+'</button>';
+    msgEl.innerHTML = esc(message) + '<div class="confirm-row"><button class="btn small danger" id="__confirmBtn" type="button">'+esc(confirmLabel)+'</button>' +
+      '<button class="btn small ghost" id="__cancelBtn" type="button">'+esc(L('btn_cancel'))+'</button></div>';
     msgEl.style.color = 'var(--warn)';
     document.getElementById('__confirmBtn').onclick = function(){ msgEl.textContent=''; onConfirm(); };
+    document.getElementById('__cancelBtn').onclick = function(){ msgEl.textContent=''; };
   }
 
   /* ---------- InBody CSV / Excel bulk import ---------- */
@@ -360,8 +363,9 @@
   function kgShort(n){ return fmtKg(n).replace(/\.0$/,''); }
   // Doses need two decimals (0.25 mg must not show as 0.3); trailing zeros dropped.
   function fmtDose(n){ return String(Math.round(n*1000)/1000); }
-  function fmtMD(iso){ var p=iso.split('-'); return p[1]+'/'+p[2]; }
-  function fmtYMD(iso){ var p=iso.split('-'); return p[0]+'年'+(+p[1])+'月'+(+p[2])+'日'; }
+  // Display only: zh "10/17" / "2026/8/18", en "Oct 17" / "Aug 18, 2026".
+  function fmtMD(iso){ var p=iso.split('-'); return LANG==='en' ? (MONTHS_EN_SHORT[(+p[1])-1]+' '+(+p[2])) : ((+p[1])+'/'+(+p[2])); }
+  function fmtYMD(iso){ var p=iso.split('-'); return LANG==='en' ? (MONTHS_EN_SHORT[(+p[1])-1]+' '+(+p[2])+', '+p[0]) : (p[0]+'/'+(+p[1])+'/'+(+p[2])); }
   function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
@@ -550,7 +554,7 @@
         (s.id===rec && !on ? '<circle cx="'+s.bx+'" cy="'+s.by+'" r="23" fill="none" stroke="var(--accent-deep)" stroke-width="1.6" stroke-dasharray="3 3"/>' : '') +
         '<circle cx="'+s.bx+'" cy="'+s.by+'" r="16" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2"/>' +
         (on ? '<path d="M'+(s.bx-6)+' '+s.by+' l4 4.5 l8 -9" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' :
-          (u!==-1 ? '<text x="'+s.bx+'" y="'+(s.by+5)+'" text-anchor="middle" font-size="13" font-weight="800" fill="var(--accent-deep)">'+(u+1)+'</text>' : '')) +
+          (u!==-1 ? '<text x="'+s.bx+'" y="'+(s.by+5)+'" text-anchor="middle" font-size="13" font-weight="800" fill="var(--accent-text)">'+(u+1)+'</text>' : '')) +
         '</g>';
     }).join('');
     return '<svg class="region-fig" viewBox="0 0 300 220" role="group">'+shape+dots+'</svg>';
@@ -728,7 +732,7 @@
       '</div>' +
       '<div class="card">' +
         lineChart(pts, {goal:mem.profile.goalWeight, height:210}) +
-        '<div class="chart-legend"><span><i style="background:var(--accent)"></i>'+esc(L('legend_weight'))+' <b class="num" style="color:var(--accent-deep)">'+(lost>=0?'−':'+')+pctChange.toFixed(1).replace('-','')+'%</b></span><span><i style="background:var(--sage)"></i>'+esc(L('legend_goalKg',{kg:fmtKg(mem.profile.goalWeight)}))+'</span></div>' +
+        '<div class="chart-legend"><span><i style="background:var(--accent)"></i>'+esc(L('legend_weight'))+' <b class="num" style="color:var(--accent-text)">'+(lost>=0?'−':'+')+pctChange.toFixed(1).replace('-','')+'%</b></span><span><i style="background:var(--sage)"></i>'+esc(L('legend_goalKg',{kg:fmtKg(mem.profile.goalWeight)}))+'</span></div>' +
       '</div>' +
       '<div class="card">' +
         '<div class="total-line">'+esc(L('weight_total'))+' <b>'+(lost>=0?'−':'+')+fmtKg(Math.abs(lost))+'</b> kg　'+(lost>=0?'−':'+')+Math.abs(pctChange).toFixed(1)+'%</div>' +
@@ -750,7 +754,7 @@
       '</div>' +
       '<div class="card">' +
         '<div class="card-head"><h2>'+esc(L('weight_recordsTitle',{n:''}).trim())+' <span class="muted num">'+mem.weights.length+'</span></h2></div>' +
-        '<div class="table-scroll"><table class="rec"><thead><tr><th>'+esc(L('th_date'))+'</th><th>'+esc(L('th_weight'))+'kg</th><th>'+esc(L('th_fatPercent'))+'</th><th>'+esc(L('th_fat'))+'kg</th><th>'+esc(L('th_muscle'))+'kg</th><th>'+esc(L('th_visceral'))+'</th><th>'+esc(L('th_score'))+'</th>'+(hasWaist?'<th>'+esc(L('th_waist'))+'</th>':'')+'<th></th></tr></thead><tbody>'+rows+'</tbody></table></div>' +
+        '<div class="table-wrap" id="weightTableWrap"><div class="table-scroll"><table class="rec"><thead><tr><th>'+esc(L('th_date'))+'</th><th>'+esc(L('th_weight'))+'kg</th><th>'+esc(L('th_fatPercent'))+'</th><th>'+esc(L('th_fat'))+'kg</th><th>'+esc(L('th_muscle'))+'kg</th><th>'+esc(L('th_visceral'))+'</th><th>'+esc(L('th_score'))+'</th>'+(hasWaist?'<th>'+esc(L('th_waist'))+'</th>':'')+'<th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>' +
       '</div>';
 
     document.getElementById('addWeightBtn').onclick = openWeightForm;
@@ -759,8 +763,18 @@
       b.onclick = function(){ weightRange = this.getAttribute('data-range'); renderWeight(); };
     });
     document.querySelectorAll('[data-del-weight]').forEach(function(b){
-      b.onclick = function(){ deleteWeight(this.getAttribute('data-del-weight')).then(function(){ renderWeight(); updateDayBadge(); }); };
+      b.onclick = function(){
+        var id = this.getAttribute('data-del-weight'), w = mem.weights.find(function(r){ return r.id===id; });
+        if (!window.confirm(L('confirm_delWeight',{d: w ? fmtYMD(w.date) : ''}))) return;
+        deleteWeight(id).then(function(){ renderWeight(); updateDayBadge(); });
+      };
     });
+    // Fade on the right edge hints the table scrolls sideways; it goes away at the end.
+    var tw = document.getElementById('weightTableWrap'), ts = tw && tw.querySelector('.table-scroll');
+    if (ts){
+      var edge = function(){ tw.classList.toggle('at-end', ts.scrollLeft + ts.clientWidth >= ts.scrollWidth - 2); };
+      ts.addEventListener('scroll', edge, {passive:true}); edge();
+    }
   }
 
   function renderShot(){
@@ -775,7 +789,7 @@
       var m = r.date.slice(0,7);
       if (m!==lastMonth){ lastMonth = m; items += '<li class="month">'+esc(monthHead(r.date))+'</li>'; }
       items += '<li class="shot-item"><div class="idx">'+(n-i)+'</div>' +
-        '<div><div class="site">'+esc(siteLabel(r.site))+'</div><div class="when">'+esc(fmtYMD(r.date).replace(/^\d+年/,''))+esc(L('dow_paren',{d:dowOf(r.date)}))+(r.time?' '+esc(r.time):'')+'</div></div>' +
+        '<div><div class="site">'+esc(siteLabel(r.site))+'</div><div class="when">'+esc(fmtMD(r.date))+esc(L('dow_paren',{d:dowOf(r.date)}))+(r.time?' '+esc(r.time):'')+'</div></div>' +
         '<div class="dose">'+fmtDose(r.doseMg)+'<small>mg</small>'+(r.medication?'<em>'+esc(medLabel(r.medication))+'</em>':'')+'</div>' +
         '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-shot="'+r.id+'">'+ICON.trash+'</button></li>';
     });
@@ -813,7 +827,11 @@
     document.getElementById('addShotBtn').onclick = openInjectionForm;
     document.getElementById('penCalcBtn').onclick = openPenCalc;
     document.querySelectorAll('[data-del-shot]').forEach(function(b){
-      b.onclick = function(){ deleteInjection(this.getAttribute('data-del-shot')).then(function(){ renderShot(); setTitle('shot'); }); };
+      b.onclick = function(){
+        var id = this.getAttribute('data-del-shot'), r = mem.injections.find(function(x){ return x.id===id; });
+        if (!window.confirm(L('confirm_delShot',{d: r ? fmtYMD(r.date) : ''}))) return;
+        deleteInjection(id).then(function(){ renderShot(); setTitle('shot'); });
+      };
     });
     bindCalNav();
   }
@@ -856,27 +874,29 @@
           '<div class="field"><label>'+esc(L('settings_startWeight'))+'</label><input id="f-start" type="number" inputmode="decimal" value="'+p.startWeight+'"></div>' +
           '<div class="field"><label>'+esc(L('settings_goalWeight'))+'</label><input id="f-goal" type="number" inputmode="decimal" value="'+p.goalWeight+'"></div>' +
         '</div>' +
-        '<button class="btn teal block" id="saveProfile1">'+esc(L('btn_save'))+'</button>' +
       '</div>' +
       '<div class="card">' +
         '<h2>'+esc(L('settings_shotTitle'))+'</h2>' +
         '<div class="field"><label>'+esc(L('settings_medication'))+'</label><input id="f-med" type="text" value="'+esc(p.medication)+'"></div>' +
         '<div class="field-row">' +
           '<div class="field"><label>'+esc(L('settings_interval'))+'</label><input id="f-interval" type="number" inputmode="numeric" value="'+p.intervalDays+'"></div>' +
-          '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="number" inputmode="decimal" value="'+p.totalSpend+'"'+(mem.purchases.length?' disabled':'')+'></div>' +
+          (mem.purchases.length ?
+            // Ledger total shown for reference only; the stored totalSpend is left untouched.
+            '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="text" value="'+esc(money(spendTotal()))+'" disabled></div>' :
+            '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="number" inputmode="decimal" value="'+p.totalSpend+'"></div>') +
         '</div>' +
         (mem.purchases.length ? '<div class="note" style="margin:-6px 0 8px">'+esc(L('settings_spendLedger'))+'</div>' : '') +
         '<div class="toggle">' +
           '<div><div class="t-label">'+esc(L('settings_reminder'))+'</div><div class="t-sub">'+esc(L('settings_reminderNote'))+'</div></div>' +
           '<div class="switch'+(p.remindersOn?' on':'')+'" id="remindToggle"><i></i></div>' +
         '</div>' +
-        '<button class="btn teal block" id="saveProfile2" style="margin-top:12px">'+esc(L('btn_save'))+'</button>' +
       '</div>' +
+      '<button class="btn primary block save-block" id="saveProfile">'+esc(L('btn_save'))+'</button>' +
       '<div class="card">' +
         '<h2>'+esc(L('settings_backupTitle'))+'</h2>' +
         '<div class="note" style="margin-bottom:10px">'+esc(persistMode==='local' ? L('settings_backupNoteLocal') : L('settings_backupNoteMemory'))+esc(L('settings_backupTail'))+'</div>' +
         '<input type="file" id="importFileInput" accept=".json,application/json,text/plain,.txt" hidden>' +
-        '<div class="action-row">' +
+        '<div class="action-row backup-row">' +
           '<button class="btn primary" id="exportFileBtn">'+esc(L('settings_exportFile'))+'</button>' +
           '<button class="btn" id="importFileBtn">'+esc(L('settings_importFile'))+'</button>' +
         '</div>' +
@@ -886,7 +906,7 @@
         '<h2>'+esc(L('settings_inbodyImportTitle'))+'</h2>' +
         '<div class="note" style="margin-bottom:10px">'+esc(L('settings_inbodyImportNote'))+'</div>' +
         '<input type="file" id="inbodyFileInput" accept=".csv,.xlsx,.xls" hidden>' +
-        '<button class="btn primary block" id="inbodyImportBtn">'+esc(L('settings_inbodyImportBtn'))+'</button>' +
+        '<button class="btn block" id="inbodyImportBtn">'+esc(L('settings_inbodyImportBtn'))+'</button>' +
         '<div class="note" id="inbodyMsg" style="margin-top:10px;min-height:14px"></div>' +
       '</div>' +
       '<div class="card">' +
@@ -917,17 +937,16 @@
         goalWeight: +document.getElementById('f-goal').value || p.goalWeight,
         medication: document.getElementById('f-med').value || p.medication,
         intervalDays: +document.getElementById('f-interval').value || p.intervalDays,
-        totalSpend: +document.getElementById('f-spend').value || 0
+        totalSpend: mem.purchases.length ? p.totalSpend : (+document.getElementById('f-spend').value || 0)
       }).then(function(){ renderSettings(); });
     }
-    document.getElementById('saveProfile1').onclick = save;
-    document.getElementById('saveProfile2').onclick = save;
+    document.getElementById('saveProfile').onclick = save;
     document.getElementById('remindToggle').onclick = function(){
       saveProfile({remindersOn: !mem.profile.remindersOn}).then(renderSettings);
     };
 
     // The settings page is redrawn after a restore, so the message goes on the new element.
-    function showBackupMsg(t){ var el = document.getElementById('backupMsg'); if (el){ el.style.color='var(--teal)'; el.textContent=t; } }
+    function showBackupMsg(t){ var el = document.getElementById('backupMsg'); if (el){ el.style.color='var(--accent-text)'; el.textContent=t; } }
     function refreshAll(){ renderHome(); renderWeight(); renderShot(); renderLedger(); }
 
     document.getElementById('exportFileBtn').onclick = function(){
@@ -979,7 +998,7 @@
         var dates = res.rows.map(function(r){ return r.date; }).sort();
         confirmInline(msg, L('msg_inbodyDetected', {n:res.rows.length, from:dates[0], to:dates[dates.length-1]}), L('msg_inbodyImportBtn'), function(){
           importInBodyRows(res.rows).then(function(){
-            msg.style.color = 'var(--teal)';
+            msg.style.color = 'var(--accent-text)';
             msg.textContent = L('msg_inbodyImported', {n:res.rows.length});
             refreshAll(); renderSettings();
           });
@@ -993,7 +1012,7 @@
       var msg = document.getElementById('clearMsg');
       confirmInline(msg, L('msg_confirmClear'), L('msg_confirmClearBtn'), function(){
         clearAllData().then(function(){
-          msg.style.color='var(--teal)'; msg.textContent=L('msg_cleared');
+          msg.style.color='var(--accent-text)'; msg.textContent=L('msg_cleared');
           refreshAll();
         });
       });
@@ -1040,7 +1059,7 @@
         '<div class="fcard"><div class="fc-title">'+esc(L('wf_muscleMass'))+unitSeg('wf-muscle-unit', muscleUnit)+'</div>' +
           '<div class="unit-input"><input type="number" inputmode="decimal" id="wf-muscle" step="0.1" placeholder="—"><span id="wf-muscle-u">'+(muscleUnit==='kg'?'kg':'%')+'</span></div></div>' +
       '</div>' +
-      '<button class="more-btn" id="wf-more" type="button" aria-expanded="false">'+esc(L('wf_more'))+' <span>▾</span></button>' +
+      '<button class="more-btn" id="wf-more" type="button" aria-expanded="false">'+esc(L('wf_more'))+'<span aria-hidden="true">›</span></button>' +
       '<div id="wf-more-box" hidden>' +
         '<div class="fcard">' +
           '<div class="field-row">' +
@@ -1124,7 +1143,7 @@
         sampleCap.json(prompt, {images:f, modelTier:'default', cache:false}).then(function(obj){
           fillFromExtract(obj||{});
           var gotAny = obj && (obj.weightKg!=null || obj.fatPercent!=null || obj.fatKg!=null || obj.muscleKg!=null);
-          aiMsg.style.color = gotAny ? 'var(--teal)' : 'var(--warn)';
+          aiMsg.style.color = gotAny ? 'var(--accent-text)' : 'var(--warn)';
           aiMsg.textContent = gotAny ? L('wf_aiFilled') : L('wf_aiEmpty');
         }).catch(function(err){
           var code = err && err.code;
@@ -1214,8 +1233,8 @@
         '<div class="chip-grid" id="pc-doses"></div></div>' +
       '<div class="fcard"><div class="fc-title">'+esc(L('pc_desired'))+'</div>' +
         '<div class="unit-input"><input type="number" inputmode="decimal" step="0.05" min="0" id="pc-want"><span>mg</span></div></div>' +
-      '<div class="pc-result" id="pc-result"></div>' +
-      '<div class="note pc-disc" id="pc-disc"></div>';
+      '<div class="note pc-disc" id="pc-disc"></div>' +
+      '<div class="sheet-foot pc-foot"><div class="pc-result" id="pc-result"></div></div>';
     overlay.classList.add('open');
     sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
@@ -1271,7 +1290,7 @@
         '<div class="note" id="sf-navel">'+esc(L('shot_navelNote'))+'</div></div>' +
       '<div class="note" id="sf-msg" style="min-height:14px;color:var(--warn)"></div>' +
       '<div class="sheet-foot"><div class="slide-save" id="sf-slide" tabindex="0" role="button" aria-label="'+esc(L('sf_slide'))+'">' +
-        '<div class="ss-fill"></div><span class="ss-text">'+esc(L('sf_slide'))+' ›››</span><div class="ss-knob">'+ICON.syringe+'</div></div></div>';
+        '<div class="ss-fill"></div><span class="ss-text">'+esc(L('sf_slide'))+' ›</span><div class="ss-knob">'+ICON.syringe+'</div></div></div>';
     overlay.classList.add('open');
     sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
@@ -1387,7 +1406,11 @@
 
     document.getElementById('addBuyBtn').onclick = openPurchaseForm;
     document.querySelectorAll('[data-del-buy]').forEach(function(b){
-      b.onclick = function(){ deletePurchase(this.getAttribute('data-del-buy')); renderLedger(); };
+      b.onclick = function(){
+        var id = this.getAttribute('data-del-buy'), p = mem.purchases.find(function(x){ return x.id===id; });
+        if (!window.confirm(L('confirm_delBuy',{d: p ? fmtYMD(p.date) : ''}))) return;
+        deletePurchase(id); renderLedger();
+      };
     });
   }
 
@@ -1680,10 +1703,10 @@
       '</div>';
     }).join('');
     var dl = new Date(dietDate+'T00:00:00');
-    var dateLabel = LANG==='en' ? (MONTHS_EN[dl.getMonth()]+' '+dl.getDate()) : ((dl.getMonth()+1)+'月'+dl.getDate()+'日'+L('dow_paren',{d:DOW.zh[dl.getDay()]}));
+    var dateLabel = LANG==='en' ? (DOW.en[dl.getDay()]+', '+MONTHS_EN_SHORT[dl.getMonth()]+' '+dl.getDate()) : ((dl.getMonth()+1)+'月'+dl.getDate()+'日'+L('dow_paren',{d:DOW.zh[dl.getDay()]}));
 
     document.getElementById('view-diet').innerHTML =
-      '<div class="card">' +
+      '<div class="card wk-card">' +
         '<div class="cal-head"><div class="m-label">'+esc(dateLabel)+'</div><div class="cal-nav"><button data-wk="-7" aria-label="prev">‹</button><button data-wk="7" aria-label="next">›</button></div></div>' +
         '<div class="wk-strip">'+days+'</div>' +
       '</div>' +
@@ -1707,7 +1730,11 @@
     document.querySelectorAll('[data-day]').forEach(function(b){ b.onclick = function(){ dietDate = this.getAttribute('data-day'); renderDiet(); }; });
     document.querySelectorAll('[data-wk]').forEach(function(b){ b.onclick = function(){ dietDate = isoShift(dietDate, +this.getAttribute('data-wk')); renderDiet(); }; });
     document.querySelectorAll('[data-add-meal]').forEach(function(b){ b.onclick = function(){ openFoodSheet('photo', this.getAttribute('data-add-meal')); }; });
-    document.querySelectorAll('[data-del-meal]').forEach(function(b){ b.onclick = function(){ deleteMeal(this.getAttribute('data-del-meal')); renderDiet(); }; });
+    document.querySelectorAll('[data-del-meal]').forEach(function(b){ b.onclick = function(){
+      var id = this.getAttribute('data-del-meal'), m = mem.meals.find(function(x){ return x.id===id; });
+      if (!window.confirm(L('confirm_delMeal',{name: m ? m.name : ''}))) return;
+      deleteMeal(id); renderDiet();
+    }; });
     document.getElementById('foodText').onclick = function(){ openFoodSheet('text'); };
     document.getElementById('foodPhoto').onclick = function(){ openFoodSheet('photo'); };
     document.getElementById('foodManual').onclick = function(){ openFoodSheet('manual'); };
@@ -1759,8 +1786,11 @@
           '<div class="est-nums">' + ['kcal','protein','carbs','fat','fiber'].map(function(k){
             return '<label><span>'+esc(k==='kcal'?'kcal':L('mac_'+k))+'</span><input type="number" inputmode="decimal" data-i="'+i+'" data-k="'+k+'" value="'+(+it[k]||0)+'"></label>';
           }).join('') + '</div></div>';
-      }).join('') + '<div class="est-total">'+esc(L('diet_total'))+' <b class="num">'+Math.round(tot.kcal)+'</b> kcal</div></div>' +
-      '<button class="btn primary block" id="fs-save">'+esc(L('diet_saveItems',{n:pending.length}))+'</button>';
+      }).join('') + '<div class="est-total">'+esc(L('diet_total'))+' <b class="num">'+Math.round(tot.kcal)+'</b> kcal</div></div>';
+    }
+    // Save button lives in the sheet's sticky footer (a direct child of the sheet so it can stay pinned).
+    function footHTML(){
+      return pending.length ? '<div class="sheet-foot" id="fs-foot"><button class="btn primary block" id="fs-save">'+esc(L('diet_saveItems',{n:pending.length}))+'</button></div>' : '';
     }
     function draw(){
       var seg = '<div class="seg" id="fs-meal">'+MEAL_KEYS.map(function(mk){ return '<button data-meal="'+mk+'" class="'+(meal===mk?'active':'')+'">'+esc(L('meal_'+mk))+'</button>'; }).join('')+'</div>';
@@ -1780,15 +1810,20 @@
           '<button class="btn primary block" id="fm-save">'+esc(L('wf_save'))+'</button>';
       }
       sheetBody.innerHTML =
-        '<div class="sheet-head"><h3>'+esc(L(mode==='photo'?'diet_photo':mode==='text'?'diet_text':'diet_manual'))+'</h3><button id="closeSheet">✕</button></div>' +
+        '<div class="sheet-head"><h3>'+esc(L(mode==='photo'?'diet_photo':mode==='text'?'diet_text':'diet_manual'))+'</h3><button id="closeSheet" type="button" aria-label="close">✕</button></div>' +
         seg + '<div style="height:14px"></div>' + body +
         '<div class="note" id="fs-msg" style="margin:10px 0;min-height:14px"></div>' +
-        '<div id="fs-items">'+itemsHTML()+'</div>' +
-        '<div class="note">'+esc(L('diet_disclaimer'))+'</div>';
+        '<div class="note" style="margin-bottom:10px">'+esc(L('diet_disclaimer'))+'</div>' +
+        '<div id="fs-items">'+itemsHTML()+'</div>' + footHTML();
       bind();
     }
     function msg(t, bad){ var el = document.getElementById('fs-msg'); el.textContent = t||''; el.style.color = bad ? 'var(--warn)' : 'var(--ink-faint)'; }
-    function refreshItems(){ document.getElementById('fs-items').innerHTML = itemsHTML(); bindItems(); }
+    function refreshItems(){
+      document.getElementById('fs-items').innerHTML = itemsHTML();
+      var old = document.getElementById('fs-foot'); if (old) old.remove();
+      sheetBody.insertAdjacentHTML('beforeend', footHTML());
+      bindItems();
+    }
     function bindItems(){
       document.querySelectorAll('#fs-items [data-k]').forEach(function(inp){
         inp.oninput = function(){ var i = +this.getAttribute('data-i'), k = this.getAttribute('data-k'); pending[i][k] = k==='name' ? this.value : (+this.value||0);
@@ -1901,10 +1936,10 @@
   function openAISheet(){
     var text = buildSummaryText();
     sheetBody.innerHTML =
-      '<div class="sheet-head"><h3>'+esc(L('ai_title'))+'</h3><button id="closeSheet">✕</button></div>' +
+      '<div class="sheet-head"><h3>'+esc(L('ai_title'))+'</h3><button id="closeSheet" type="button" aria-label="close">✕</button></div>' +
       '<div class="note" style="margin-bottom:10px">'+esc(L('ai_note'))+'</div>' +
       '<div class="ai-preview">'+esc(text)+'</div>' +
-      '<div class="action-row" style="margin-top:12px">' +
+      '<div class="sheet-foot two">' +
         '<button class="btn ghost" id="aiCopyBtn">'+esc(L('ai_copyBtn'))+'</button>' +
         '<a class="btn primary" id="aiOpenBtn" href="https://gemini.google.com/app" target="_blank" rel="noopener">'+esc(L('ai_openBtn'))+'</a>' +
       '</div>';
