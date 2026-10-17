@@ -1,0 +1,37 @@
+name: Basic build check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The repo has no package.json today (static site + Vercel function in src/api).
+      # If one is added later, install and build with it.
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci
+          elif [ -f package.json ]; then npm install
+          else echo "No package.json — skipping install"; fi
+      - name: Build (if a build script exists)
+        run: |
+          if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
+            npm run build
+          else
+            echo "No build script — skipping"
+          fi
+      - name: Syntax check JS
+        run: |
+          set -e
+          find . -name '*.js' -not -path './node_modules/*' -not -path './.git/*' -print0 |
+            while IFS= read -r -d '' f; do echo "check $f"; node --check "$f"; done
