@@ -542,8 +542,10 @@
 
   /* ---- 2026-10-18 SI 風格統一：共用狀態膠囊 + 開關點擊範圍 ---- */
   header.top .day-badge,
-  .summary-grid .ring-wrap .ring-val small{
-    display:inline-flex;align-items:center;justify-content:center;min-height:26px;padding:4px 12px;
+  .summary-grid .ring-wrap .ring-val small,
+  .diet-sum .ring-val small{
+    display:inline-flex;align-items:center;justify-content:center;min-height:26px;padding:4px 10px;
     border-radius:999px;font-size:12px;font-weight:700;line-height:1.2;letter-spacing:.01em;white-space:nowrap;
   }
   .switch::before{content:'';position:absolute;inset:-7px -2px;} /* 44px tall hit area, same look */
+  header.top .day-badge{padding:7px 12px;} /* 頂部徽章維持原本 7px 12px 內距，只統一圓角與字級 */
