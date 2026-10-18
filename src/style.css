@@ -549,3 +549,45 @@
   }
   .switch::before{content:'';position:absolute;inset:-7px -2px;} /* 44px tall hit area, same look */
   header.top .day-badge{padding:7px 12px;} /* 頂部徽章維持原本 7px 12px 內距，只統一圓角與字級 */
+
+/* Forma presentation: retain the terracotta identity with measured card spacing.
+   No record schema, chart calculation, or application behaviour changes. */
+[data-forma-theme="zhenyaozhi"] { line-height:1.5; }
+[data-forma-theme="zhenyaozhi"] header.top { padding-block:calc(12px + env(safe-area-inset-top,0px)) 12px; border-bottom:1px solid var(--line); }
+[data-forma-theme="zhenyaozhi"] main { padding-top:16px; }
+[data-forma-theme="zhenyaozhi"] section.view { gap:16px; }
+[data-forma-theme="zhenyaozhi"] .card { border:1px solid var(--line); }
+[data-forma-theme="zhenyaozhi"] .card h2 { font-size:18px; line-height:1.4; }
+[data-forma-theme="zhenyaozhi"] .banner { font-size:13px; line-height:1.65; }
+[data-forma-theme="zhenyaozhi"] .stat-tile { border:1px solid var(--line); }
+[data-forma-theme="zhenyaozhi"] .stat-tile .value { letter-spacing:-.025em; }
+[data-forma-theme="zhenyaozhi"] .btn { border-radius:16px; }
+[data-forma-theme="zhenyaozhi"] .btn.small { border-radius:12px; }
+[data-forma-theme="zhenyaozhi"] nav.bottom .bar { max-width:640px; }
+[data-forma-theme="zhenyaozhi"] nav.bottom button { min-height:56px; border-radius:16px; }
+[data-forma-theme="zhenyaozhi"] nav.bottom button.active { background:var(--accent-soft); }
+[data-forma-theme="zhenyaozhi"] nav.bottom button.active::before { display:none; }
+[data-forma-theme="zhenyaozhi"] :is(button, a, input, select, textarea, [tabindex]):focus-visible { outline:2px solid var(--accent-text); outline-offset:3px; }
+@media (min-width:768px) {
+  [data-forma-theme="zhenyaozhi"] header.top { padding-inline:max(32px,calc((100% - 1056px)/2)); }
+  [data-forma-theme="zhenyaozhi"] main { width:100%; max-width:1120px; margin-inline:auto; padding:24px 32px 128px; }
+  [data-forma-theme="zhenyaozhi"] section.view:not(#view-home) { width:100%; max-width:800px; margin-inline:auto; }
+  [data-forma-theme="zhenyaozhi"] #view-home.active { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
+  [data-forma-theme="zhenyaozhi"] #view-home > .banner { grid-column:1 / -1; }
+  [data-forma-theme="zhenyaozhi"] #view-home > .hero { grid-column:1; grid-row:span 2; align-self:stretch; padding:28px; min-height:280px; display:flex; flex-direction:column; justify-content:center; }
+  [data-forma-theme="zhenyaozhi"] #view-home > .hero .big { font-size:64px; }
+  [data-forma-theme="zhenyaozhi"] #view-home > .card { grid-column:2; grid-row:span 2; min-height:280px; }
+  [data-forma-theme="zhenyaozhi"] #view-home > .card svg.chart { max-height:240px; }
+  [data-forma-theme="zhenyaozhi"] #view-home > .action-row { grid-column:1; }
+  [data-forma-theme="zhenyaozhi"] #view-home > .stat-row { grid-column:2; }
+  [data-forma-theme="zhenyaozhi"] .stat-tile { padding:16px; }
+  [data-forma-theme="zhenyaozhi"] .sheet { max-width:640px; border-radius:24px 24px 0 0; }
+}
+@media (max-width:359px) {
+  [data-forma-theme="zhenyaozhi"] main { padding-inline:12px; }
+  [data-forma-theme="zhenyaozhi"] .hero { padding:20px 16px; }
+  [data-forma-theme="zhenyaozhi"] .hero .big { font-size:50px; }
+  [data-forma-theme="zhenyaozhi"] .hero .bar-labels { gap:4px; font-size:11px; }
+  [data-forma-theme="zhenyaozhi"] .hero-cat { width:32%; }
+  [data-forma-theme="zhenyaozhi"] nav.bottom button span { font-size:12px; }
+}
