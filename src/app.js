@@ -35,7 +35,14 @@
   var DOW = { zh:['日','一','二','三','四','五','六'], en:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] };
   var MONTHS_EN_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  var todayISO = new Date().toISOString().slice(0,10);
+  var RECORDS = window.ZY_RECORDS;
+  var todayISO = RECORDS.localDate(new Date());
+  function refreshToday(){
+    var previous = todayISO;
+    todayISO = RECORDS.localDate(new Date());
+    // Follow today across midnight, but keep a deliberately selected historical diet date.
+    if (dietDate===previous) dietDate = todayISO;
+  }
 
   /* ---------- i18n ---------- */
   var LANG = 'zh';
@@ -62,6 +69,9 @@
     purchases: [] // added 2026-10: 帳本 {id,date,medication,items:[{doseMg,qty}],price,place}
   };
   var LS_KEY = 'zhenyaozhi.records.v1';
+  var recoveryRaw = null; // Preserve damaged existing storage until the user restores or clears it.
+  var recoveryLang = 'zh';
+  var recoveryProfile = null;
   var persistMode = 'memory'; // 'local' | 'memory'
   var downloadsCap = null;
   var sampleCap = null;
@@ -84,19 +94,23 @@
     for (var i=0;i<8;i++){
       var d = new Date(start); d.setDate(d.getDate() + i*7);
       w = +(w - (1.1 + Math.random()*0.9)).toFixed(1);
-      out.weights.push({id:uuid(), date:d.toISOString().slice(0,10), weightKg:w, fatKg:null, muscleKg:null});
-      out.injections.push({id:uuid(), date:d.toISOString().slice(0,10), doseMg: i<3?0.25:(i<6?0.5:1.0), site:SITES[i%SITES.length].id});
+      out.weights.push({id:uuid(), date:RECORDS.localDate(d), weightKg:w, fatKg:null, muscleKg:null});
+      out.injections.push({id:uuid(), date:RECORDS.localDate(d), doseMg: i<3?0.25:(i<6?0.5:1.0), site:SITES[i%SITES.length].id});
     }
     return out;
   }
 
   function readLocalStorage(){
+    var raw = null;
     try{
-      var raw = localStorage.getItem(LS_KEY);
-      if (!raw) return null;
+      raw = localStorage.getItem(LS_KEY);
+      if (raw===null) return null;
       var obj = JSON.parse(raw);
-      if (obj && obj.profile && Array.isArray(obj.weights) && Array.isArray(obj.injections)) return obj;
+      if (obj && obj.profile && (obj.profile.lang==='zh' || obj.profile.lang==='en')) recoveryLang = obj.profile.lang;
+      if (obj && obj.profile && RECORDS.isBackup({profile:obj.profile, weights:[], injections:[]})) recoveryProfile = obj.profile;
+      if (RECORDS.isBackup(obj)) return obj;
     }catch(e){}
+    if (raw!==null) recoveryRaw = raw;
     return null;
   }
   function writeLocalStorage(){
@@ -117,11 +131,13 @@
 
     var saved = persistMode==='local' ? readLocalStorage() : null;
     if (saved){
-      mem.profile = Object.assign(defaultProfile(), saved.profile, {seeded:false});
+      mem.profile = Object.assign(defaultProfile(), {seeded:false}, saved.profile);
       mem.weights = saved.weights;
       mem.injections = saved.injections;
       mem.meals = Array.isArray(saved.meals) ? saved.meals : [];
       mem.purchases = Array.isArray(saved.purchases) ? saved.purchases : [];
+    } else if (recoveryRaw!==null){
+      mem.profile = Object.assign(defaultProfile(), {seeded:false, lang:recoveryLang}, recoveryProfile||{});
     } else {
       var seed = seedDemoData();
       mem.profile = defaultProfile();
@@ -180,18 +196,38 @@
     writeLocalStorage();
   }
   async function clearAllData(){
+    if (recoveryRaw!==null){
+      return restoreFromBackup({profile:Object.assign({}, mem.profile, {seeded:false}), weights:[], injections:[], meals:[], purchases:[]});
+    }
     mem.weights = []; mem.injections = []; mem.meals = []; mem.purchases = [];
+    mem.profile.seeded = false;
     writeLocalStorage();
+    return true;
   }
   async function restoreFromBackup(obj){
-    mem.profile = Object.assign(defaultProfile(), mem.profile, obj.profile||{}, {seeded:false});
-    mem.weights = obj.weights.map(function(w){ return Object.assign({}, w, {id:w.id||uuid()}); });
-    mem.injections = obj.injections.map(function(r){ return Object.assign({}, r, {id:r.id||uuid()}); });
+    if (!RECORDS.isBackup(obj)) return false;
+    var next = {
+      profile:Object.assign(defaultProfile(), mem.profile, {seeded:false}, obj.profile||{}),
+      weights:obj.weights.map(function(w){ return Object.assign({}, w, {id:w.id||uuid()}); }),
+      injections:obj.injections.map(function(r){ return Object.assign({}, r, {id:r.id||uuid()}); }),
+      meals:mem.meals,
+      purchases:mem.purchases
+    };
     // Backups made before the diet page have no meals: keep what is on this phone instead of wiping it.
-    if (Array.isArray(obj.meals)) mem.meals = obj.meals.map(function(m){ return Object.assign({}, m, {id:m.id||uuid()}); });
-    if (Array.isArray(obj.purchases)) mem.purchases = obj.purchases.map(function(m){ return Object.assign({}, m, {id:m.id||uuid()}); });
-    sortData();
-    writeLocalStorage();
+    if (Array.isArray(obj.meals)) next.meals = obj.meals.map(function(m){ return Object.assign({}, m, {id:m.id||uuid()}); });
+    if (Array.isArray(obj.purchases)) next.purchases = obj.purchases.map(function(m){ return Object.assign({}, m, {id:m.id||uuid()}); });
+    if (!RECORDS.isBackup(next)) return false;
+    next.weights.sort(byDateTime); next.injections.sort(byDateTime);
+    next.purchases.sort(function(a,b){ return a.date.localeCompare(b.date); });
+    // Commit storage first: a failed write must also leave the in-memory records intact.
+    if (persistMode==='local'){
+      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); }
+      catch(e){ return false; }
+    }
+    mem = next;
+    recoveryRaw = null;
+    demoBannerDismissed = false;
+    return true;
   }
 
   /* ---------- backup / restore (export a file, re-import it) ---------- */
@@ -203,13 +239,13 @@
   function parseBackupText(text){
     try{
       var obj = JSON.parse(text);
-      if (obj && typeof obj==='object' && Array.isArray(obj.weights) && Array.isArray(obj.injections)) return obj;
+      if (RECORDS.isBackup(obj)) return obj;
     }catch(e){}
     return null;
   }
   // Real file on the live site: phones get the share sheet (儲存到「檔案」、LINE、Email…),
   // everything else gets a normal download.
-  function backupFileName(){ return 'zhenyaozhi-backup-'+todayISO+'.json'; }
+  function backupFileName(){ refreshToday(); return 'zhenyaozhi-backup-'+todayISO+'.json'; }
   function downloadBlob(blob, name){
     var url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
@@ -719,7 +755,7 @@
         '<td class="num">'+(w.visceralFat!=null?w.visceralFat:'—')+'</td>' +
         '<td class="num">'+(w.score!=null?w.score:'—')+'</td>' +
         (hasWaist ? '<td class="num">'+(w.waistCm!=null?fmtKg(w.waistCm):'—')+'</td>' : '') +
-        '<td class="row-actions"><button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-weight="'+w.id+'">'+ICON.trash+'</button></td></tr>';
+        '<td class="row-actions"><button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-weight="'+esc(w.id)+'">'+ICON.trash+'</button></td></tr>';
     });
     if (!rows) rows = '<tr class="empty-row"><td colspan="'+cols+'">'+esc(L('empty_weight'))+'</td></tr>';
 
@@ -791,7 +827,7 @@
       items += '<li class="shot-item"><div class="idx">'+(n-i)+'</div>' +
         '<div><div class="site">'+esc(siteLabel(r.site))+'</div><div class="when">'+esc(fmtMD(r.date))+esc(L('dow_paren',{d:dowOf(r.date)}))+(r.time?' '+esc(r.time):'')+'</div></div>' +
         '<div class="dose">'+fmtDose(r.doseMg)+'<small>mg</small>'+(r.medication?'<em>'+esc(medLabel(r.medication))+'</em>':'')+'</div>' +
-        '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-shot="'+r.id+'">'+ICON.trash+'</button></li>';
+        '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-shot="'+esc(r.id)+'">'+ICON.trash+'</button></li>';
     });
     if (!items) items = '<li class="empty">'+esc(L('empty_shot'))+'</li>';
 
@@ -850,7 +886,61 @@
     });
   }
 
+  function bindBackupImport(){
+    document.getElementById('importFileBtn').onclick = function(){ document.getElementById('importFileInput').click(); };
+    document.getElementById('importFileInput').onchange = function(e){
+      var f = e.target.files && e.target.files[0], msg = document.getElementById('backupMsg');
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        var obj = parseBackupText(String(reader.result));
+        e.target.value = '';
+        if (!obj){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badFile'); return; }
+        confirmInline(msg, L('msg_detected',backupCounts(obj)), L('msg_confirmRestore'), function(){
+          restoreFromBackup(obj).then(function(ok){
+            if (!ok){ msg.style.color='var(--warn)'; msg.textContent=L('msg_restoreFailed'); return; }
+            LANG = mem.profile.lang || LANG;
+            updateNavLabels(); updateDayBadge();
+            renderHome(); renderWeight(); renderShot(); renderLedger(); renderSettings();
+            var restored = document.getElementById('backupMsg');
+            restored.style.color='var(--accent-text)'; restored.textContent=L('msg_restored',backupCounts(mem));
+          });
+        });
+      };
+      reader.onerror = function(){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badFile'); e.target.value=''; };
+      reader.readAsText(f, 'utf-8');
+    };
+  }
+  function renderRecoverySettings(){
+    document.getElementById('aiPill').disabled = true;
+    document.getElementById('view-settings').innerHTML =
+      '<div class="card"><h2>'+esc(L('recovery_title'))+'</h2><p class="note">'+esc(L('recovery_note'))+'</p>' +
+      '<button class="btn primary block" id="exportRawBtn">'+esc(L('recovery_export'))+'</button></div>' +
+      '<div class="card"><h2>'+esc(L('settings_backupTitle'))+'</h2>' +
+      '<input type="file" id="importFileInput" accept=".json,application/json,text/plain,.txt" hidden>' +
+      '<button class="btn block" id="importFileBtn">'+esc(L('settings_importFile'))+'</button>' +
+      '<div class="note" id="backupMsg" role="alert" style="margin-top:10px"></div></div>' +
+      '<div class="card"><h2>'+esc(L('settings_dataMgmtTitle'))+'</h2>' +
+      '<button class="btn danger block" id="clearBtn">'+esc(L('settings_clearBtn'))+'</button>' +
+      '<div class="note" id="clearMsg" style="margin-top:10px"></div></div>';
+    document.getElementById('exportRawBtn').onclick = function(){
+      refreshToday();
+      downloadBlob(new Blob([recoveryRaw], {type:'application/json'}), 'zhenyaozhi-recovery-'+todayISO+'.json');
+    };
+    bindBackupImport();
+    document.getElementById('clearBtn').onclick = function(){
+      var msg = document.getElementById('clearMsg');
+      confirmInline(msg, L('msg_confirmClear'), L('msg_confirmClearBtn'), function(){
+        clearAllData().then(function(ok){
+          if (!ok){ msg.style.color='var(--warn)'; msg.textContent=L('msg_restoreFailed'); return; }
+          renderSettings(); document.getElementById('clearMsg').textContent=L('msg_cleared');
+        });
+      });
+    };
+  }
   function renderSettings(){
+    if (recoveryRaw!==null){ renderRecoverySettings(); return; }
+    document.getElementById('aiPill').disabled = false;
     var p = mem.profile;
     document.getElementById('view-settings').innerHTML =
       '<div class="card">' +
@@ -892,6 +982,7 @@
         '</div>' +
       '</div>' +
       '<button class="btn primary block save-block" id="saveProfile">'+esc(L('btn_save'))+'</button>' +
+      '<div class="note" id="profileMsg" role="alert" hidden></div>' +
       '<div class="card">' +
         '<h2>'+esc(L('settings_backupTitle'))+'</h2>' +
         '<div class="note" style="margin-bottom:10px">'+esc(persistMode==='local' ? L('settings_backupNoteLocal') : L('settings_backupNoteMemory'))+esc(L('settings_backupTail'))+'</div>' +
@@ -930,23 +1021,26 @@
     });
 
     function save(){
-      saveProfile({
+      var patch = {
         gender: document.getElementById('f-gender').value,
-        heightCm: +document.getElementById('f-height').value || p.heightCm,
-        startWeight: +document.getElementById('f-start').value || p.startWeight,
-        goalWeight: +document.getElementById('f-goal').value || p.goalWeight,
+        heightCm: +document.getElementById('f-height').value,
+        startWeight: +document.getElementById('f-start').value,
+        goalWeight: +document.getElementById('f-goal').value,
         medication: document.getElementById('f-med').value || p.medication,
-        intervalDays: +document.getElementById('f-interval').value || p.intervalDays,
-        totalSpend: mem.purchases.length ? p.totalSpend : (+document.getElementById('f-spend').value || 0)
-      }).then(function(){ renderSettings(); });
+        intervalDays: +document.getElementById('f-interval').value,
+        totalSpend: mem.purchases.length ? p.totalSpend : +document.getElementById('f-spend').value
+      };
+      if (!RECORDS.isProfile(Object.assign({}, p, patch))){
+        var msg = document.getElementById('profileMsg');
+        msg.hidden = false; msg.style.color = 'var(--warn)'; msg.textContent = L('msg_invalidValues'); return;
+      }
+      saveProfile(patch).then(function(){ renderSettings(); });
     }
     document.getElementById('saveProfile').onclick = save;
     document.getElementById('remindToggle').onclick = function(){
       saveProfile({remindersOn: !mem.profile.remindersOn}).then(renderSettings);
     };
 
-    // The settings page is redrawn after a restore, so the message goes on the new element.
-    function showBackupMsg(t){ var el = document.getElementById('backupMsg'); if (el){ el.style.color='var(--accent-text)'; el.textContent=t; } }
     function refreshAll(){ renderHome(); renderWeight(); renderShot(); renderLedger(); }
 
     document.getElementById('exportFileBtn').onclick = function(){
@@ -957,28 +1051,7 @@
         setTimeout(function(){ btn.textContent = orig; }, 2200);
       });
     };
-    document.getElementById('importFileBtn').onclick = function(){
-      document.getElementById('importFileInput').click();
-    };
-    document.getElementById('importFileInput').onchange = function(e){
-      var f = e.target.files && e.target.files[0];
-      var msg = document.getElementById('backupMsg');
-      if (!f) return;
-      var reader = new FileReader();
-      reader.onload = function(){
-        var obj = parseBackupText(String(reader.result));
-        e.target.value = '';
-        if (!obj){ msg.style.color='var(--warn)'; msg.textContent=L('msg_badFile'); return; }
-        confirmInline(msg, L('msg_detected',backupCounts(obj)), L('msg_confirmRestore'), function(){
-          restoreFromBackup(obj).then(function(){
-            LANG = mem.profile.lang || LANG;
-            updateNavLabels(); updateDayBadge(); refreshAll(); renderSettings();
-            showBackupMsg(L('msg_restored',backupCounts(mem)));
-          });
-        });
-      };
-      reader.readAsText(f, 'utf-8');
-    };
+    bindBackupImport();
     document.getElementById('inbodyImportBtn').onclick = function(){
       document.getElementById('inbodyFileInput').click();
     };
@@ -1026,6 +1099,7 @@
   overlay.addEventListener('click', function(e){ if (e.target===overlay) closeSheet(); });
 
   function openWeightForm(){
+    refreshToday();
     var aiAvailable = !!(sampleCap && sampleImgLimits && sampleImgLimits.images);
     var fatUnit = mem.profile.fatUnit==='pct' ? 'pct' : 'kg';
     var muscleUnit = mem.profile.muscleUnit==='pct' ? 'pct' : 'kg';
@@ -1163,7 +1237,9 @@
 
     document.getElementById('wf-save').onclick = function(){
       var v = +document.getElementById('wf-weight').value;
-      if (!(v>0)){ document.getElementById('wf-msg').textContent = L('wf_needWeight'); document.getElementById('wf-weight').focus(); return; }
+      if (!(v>0) || !Number.isFinite(v)){ document.getElementById('wf-msg').textContent = L('wf_needWeight'); document.getElementById('wf-weight').focus(); return; }
+      var badNumber = Array.from(sheetBody.querySelectorAll('input[type="number"]')).some(function(el){ return el.validity.badInput || (el.value!=='' && !Number.isFinite(+el.value)); });
+      if (badNumber){ document.getElementById('wf-msg').textContent = L('msg_invalidValues'); return; }
       function numOrNull(id){ var el = document.getElementById(id); return el.value!=='' && isFinite(+el.value) ? +el.value : null; }
       function r1(n){ return Math.round(n*10)/10; }
       var fat = numOrNull('wf-fat'), muscle = numOrNull('wf-muscle');
@@ -1187,6 +1263,7 @@
         score: numOrNull('wf-score')
       };
       if (custom.length) rec.custom = custom;
+      if (!RECORDS.isWeight(rec)){ document.getElementById('wf-msg').textContent = L('msg_invalidValues'); return; }
       mem.profile.fatUnit = fatUnit; mem.profile.muscleUnit = muscleUnit;
       addWeight(rec).then(function(){
         closeSheet(); renderHome(); renderWeight(); updateDayBadge();
@@ -1269,6 +1346,7 @@
   }
 
   function openInjectionForm(){
+    refreshToday();
     var med = defaultMed();
     var li = latestInjection();
     var region = li ? regionOf(li.site) : 'abd';
@@ -1341,15 +1419,17 @@
     slideToSave(document.getElementById('sf-slide'), function(){
       var msgEl = document.getElementById('sf-msg');
       var d = custom ? +document.getElementById('sf-dose').value : dose;
-      if (!(d>0)){ msgEl.textContent = L('sf_needDose'); if (custom) document.getElementById('sf-dose').focus(); return false; }
+      if (!(d>0) || !Number.isFinite(d)){ msgEl.textContent = L('sf_needDose'); if (custom) document.getElementById('sf-dose').focus(); return false; }
       if (!site){ msgEl.textContent = L('sf_needSite'); return false; }
-      addInjection({
+      var rec = {
         date: document.getElementById('sf-date').value || todayISO,
         time: document.getElementById('sf-time').value || '',
         medication: med,
         doseMg: d,
         site: site
-      }).then(function(){
+      };
+      if (!RECORDS.isInjection(rec)){ msgEl.textContent = L('msg_invalidValues'); return false; }
+      addInjection(rec).then(function(){
         closeSheet(); renderHome(); renderShot(); setTitle(currentView);
       });
     });
@@ -1378,7 +1458,7 @@
         '<div class="b-dose"><small>'+esc(medLabel(p.medication))+'</small>'+esc(purchaseDoseText(p))+'</div>' +
         '<div class="b-price num">'+money(+p.price||0)+'</div>' +
         '<div class="b-place">'+esc(p.place||'—')+'</div>' +
-        '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-buy="'+p.id+'">'+ICON.trash+'</button></li>';
+        '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-buy="'+esc(p.id)+'">'+ICON.trash+'</button></li>';
     });
     if (!rows) rows = '<li class="empty">'+esc(L('ledger_empty'))+'</li>';
 
@@ -1415,6 +1495,7 @@
   }
 
   function openPurchaseForm(){
+    refreshToday();
     var med = defaultMed();
     var counts = {mounjaro:{}, wegovy:{}};      // per medicine: dose -> qty
     var customDose = {mounjaro:'', wegovy:''}, customQty = {mounjaro:0, wegovy:0};
@@ -1478,12 +1559,14 @@
       }
       var price = +document.getElementById('pf-price').value;
       if (!items.length){ msgEl.textContent = L('pf_needQty'); return; }
-      if (!(price>0)){ msgEl.textContent = L('pf_needPrice'); document.getElementById('pf-price').focus(); return; }
-      addPurchase({
+      if (!(price>0) || !Number.isFinite(price)){ msgEl.textContent = L('pf_needPrice'); document.getElementById('pf-price').focus(); return; }
+      var rec = {
         date: document.getElementById('pf-date').value || todayISO,
         medication: med, items: items, price: price,
         place: document.getElementById('pf-place').value.trim().slice(0,40)
-      });
+      };
+      if (!RECORDS.isPurchase(rec)){ msgEl.textContent = L('msg_invalidValues'); return; }
+      addPurchase(rec);
       closeSheet(); renderLedger(); renderHome();
     };
   }
@@ -1502,6 +1585,7 @@
     ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
   }
   function drawShareCard(showWeight){
+    refreshToday();
     var W = 1080, H = 1350;
     var fontsReady = (document.fonts && document.fonts.load) ? Promise.all([
       document.fonts.load('900 100px Nunito'), document.fonts.load('800 40px Nunito')
@@ -1698,7 +1782,7 @@
           return '<div class="food-row"><div><div class="food-name">'+esc(m.name)+(m.portion?' <small>'+esc(m.portion)+'</small>':'')+'</div>' +
             '<div class="food-mac">'+esc(L('mac_protein'))+' '+r1(+m.protein||0)+'g · '+esc(L('mac_carbs'))+' '+r1(+m.carbs||0)+'g · '+esc(L('mac_fat'))+' '+r1(+m.fat||0)+'g</div></div>' +
             '<div class="food-kcal num">'+Math.round(+m.kcal||0)+'<small>kcal</small></div>' +
-            '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-meal="'+m.id+'">'+ICON.trash+'</button></div>';
+            '<button class="icon-btn" aria-label="'+esc(L('a11y_delete'))+'" data-del-meal="'+esc(m.id)+'">'+ICON.trash+'</button></div>';
         }).join('') +
       '</div>';
     }).join('');
@@ -1774,6 +1858,7 @@
   }
 
   function openFoodSheet(mode, meal){
+    refreshToday();
     meal = meal || defaultMeal();
     var pending = []; // items waiting for confirmation
     function itemsHTML(){
@@ -1826,16 +1911,17 @@
     }
     function bindItems(){
       document.querySelectorAll('#fs-items [data-k]').forEach(function(inp){
-        inp.oninput = function(){ var i = +this.getAttribute('data-i'), k = this.getAttribute('data-k'); pending[i][k] = k==='name' ? this.value : (+this.value||0);
+        inp.oninput = function(){ var i = +this.getAttribute('data-i'), k = this.getAttribute('data-k'); pending[i][k] = k==='name' ? this.value : +this.value;
           if (k!=='name'){ var tot = document.querySelector('.est-total b'); if (tot) tot.textContent = Math.round(sumMeals(pending).kcal); } };
       });
       document.querySelectorAll('#fs-items [data-rm]').forEach(function(b){ b.onclick = function(){ pending.splice(+this.getAttribute('data-rm'),1); refreshItems(); }; });
       var sv = document.getElementById('fs-save');
       if (sv) sv.onclick = function(){
         var keep = pending.filter(function(it){ return String(it.name).trim(); }).map(function(it){
-          return {date:dietDate, meal:meal, name:String(it.name).trim(), portion:it.portion||'', kcal:+it.kcal||0, protein:+it.protein||0, carbs:+it.carbs||0, fat:+it.fat||0, fiber:+it.fiber||0, source:mode};
+          return {date:dietDate, meal:meal, name:String(it.name).trim(), portion:it.portion||'', kcal:+it.kcal, protein:+it.protein, carbs:+it.carbs, fat:+it.fat, fiber:+it.fiber, source:mode};
         });
         if (!keep.length) return;
+        if (!keep.every(RECORDS.isMeal)){ msg(L('msg_invalidValues'), true); return; }
         addMeals(keep); closeSheet(); renderDiet();
       };
     }
@@ -1874,9 +1960,10 @@
           var name = document.getElementById('fm-name').value.trim();
           var kcal = +document.getElementById('fm-kcal').value;
           if (!name){ document.getElementById('fm-name').focus(); return; }
-          if (!(kcal>=0)) kcal = 0;
-          function n(id){ return +document.getElementById(id).value || 0; }
-          addMeals([{date:dietDate, meal:meal, name:name, portion:'', kcal:kcal, protein:n('fm-protein'), carbs:n('fm-carbs'), fat:n('fm-fat'), fiber:n('fm-fiber'), source:'manual'}]);
+          function n(id){ return +document.getElementById(id).value; }
+          var rec = {date:dietDate, meal:meal, name:name, portion:'', kcal:kcal, protein:n('fm-protein'), carbs:n('fm-carbs'), fat:n('fm-fat'), fiber:n('fm-fiber'), source:'manual'};
+          if (!RECORDS.isMeal(rec)){ msg(L('msg_invalidValues'), true); return; }
+          addMeals([rec]);
           closeSheet(); renderDiet();
         };
       }
@@ -1961,6 +2048,9 @@
     document.getElementById('viewTitle').innerHTML = esc(L('title_'+name)) + (sub ? '<small>'+esc(sub)+'</small>' : '');
   }
   function switchView(name){
+    refreshToday();
+    if (recoveryRaw!==null) name = 'settings';
+    updateDayBadge();
     currentView = name;
     document.querySelectorAll('.view').forEach(function(v){ v.classList.toggle('active', v.getAttribute('data-view')===name); });
     document.querySelectorAll('nav.bottom button').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-nav')===name); });

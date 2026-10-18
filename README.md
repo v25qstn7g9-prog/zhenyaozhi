@@ -4,7 +4,7 @@ GLP-1 注射與體重紀錄的個人網頁 App（純前端，沒有後端）。
 
 - 正式網址：https://zhenyaozhi-tracker.vercel.app
 - Vercel 專案：`zhenyaozhi-tracker`（帳號範圍 `johnny576707`）
-- 上線的檔案就是 `src/` 裡的四個檔：`index.html`、`style.css`、`i18n.js`（介面文字，中／英）、`app.js`。
+- 前端上線檔案位於 `src/`：`index.html`、`style.css`、`i18n.js`（中／英文字）、`records.js`（資料驗證）、`app.js`，以及圖示與圖片。
 - 部署方式：已連 Git，推到 `main` 會自動部署到正式網址。Vercel 專案的 Root Directory 必須是 `src`，否則網站會 404。
 
 ## 飲食頁的 AI 估算
@@ -19,6 +19,13 @@ GLP-1 注射與體重紀錄的個人網頁 App（純前端，沒有後端）。
 - 改版時不要改這個 key 或欄位，否則手機裡的舊紀錄會讀不到。要改格式前先請使用者在「設定 → 備份與還原 → 備份」匯出備份檔。
 
 - 2026-10 第二批新增欄位（都是選填，舊資料照常讀）：`purchases`（帳本：`{date, medication, items:[{doseMg, qty}], price, place}`）；注射加 `medication`（`mounjaro`／`wegovy`）、`time`，部位多了 `c-abd-u`、`r-abd-m`、`l-abd-m`、`c-abd-l`；體重加 `time`、`musclePercent`、`waistCm`、`leanKg`、`custom:[{name, value}]`。有帳本紀錄時，累計花費以帳本為準。
+
+- 還原前會驗證日期、必要欄位與數值，失敗不改現有資料。舊備份未提供 `meals`／`purchases` 時，保留瀏覽器現有的對應紀錄。讀到損毀的既存資料時，先提供「下載原始資料」與還原／確認清除入口，不自動覆寫成示範資料。
+
+## 回歸檢查
+
+- 無額外套件的資料驗證測試（CI 也執行）：`node --test tests/*.test.js`。
+- 瀏覽器回歸需可用的 Playwright 與 Chromium。先在另一個終端執行 `python3 -m http.server 8202 --directory src`，再執行 `node --test tests/browser.browser.js`。可用 `ZY_TEST_URL` 與 `CHROMIUM_PATH` 指定本機服務及瀏覽器。測試只用隔離示範資料，阻擋 AI 請求；估算編修測試使用攔截的固定回應。
 
 ## 歷史
 
