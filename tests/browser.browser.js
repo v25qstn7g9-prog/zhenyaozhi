@@ -214,7 +214,6 @@ test('a save that fails keeps a visible alert with retry and backup until a late
     await page.click('#saveRetry'); assert.equal(await page.locator('#saveAlert').isVisible(), true);
     assert.match(await page.locator('#saveAlert').textContent(), /還是存不進去|Still can't save/);
     // leaving the page while unsaved asks first
-    let asked = false; page.once('dialog', d => { asked = true; d.dismiss(); });
     await page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); window.__prevented = e.defaultPrevented; });
     assert.equal(await page.evaluate(() => window.__prevented), true);
     // space freed: retry saves the meal and the alert goes away
@@ -233,5 +232,28 @@ test('a browser that cannot store at all shows the alert with backup only', asyn
     await page.waitForSelector('#saveAlert:not([hidden])');
     assert.equal(await page.locator('#saveRetry').count(), 0); assert.equal(await page.locator('#saveBackup').count(), 1);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const leaveAsks = () => page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+    assert.equal(await leaveAsks(), false, 'only sample data: nothing to lose');
+    await page.click('[data-nav=diet]'); await page.click('#foodManual'); await page.fill('#fm-name', 'Memory meal'); await page.fill('#fm-kcal', '300'); await page.click('#fm-save');
+    assert.equal(await leaveAsks(), true, 'a record that cannot be stored: leaving asks first');
+  } finally { await context.close(); }
+});
+test('the save alert follows the language, is not rebuilt on every failed save, and goes away after a successful restore', async () => {
+  const { context, page } = await fresh();
+  try {
+    await page.evaluate(key => { const orig = Storage.prototype.setItem; window.__full = true; Storage.prototype.setItem = function (k, v) { if (k === key && window.__full) throw new DOMException('full', 'QuotaExceededError'); return orig.call(this, k, v); }; }, KEY);
+    await page.click('[data-nav=settings]'); await page.click('#langSeg [data-lang=en]');
+    await page.waitForSelector('#saveAlert:not([hidden])');
+    assert.match(await page.locator('#saveAlert .save-alert-text').textContent(), /not saved/);
+    await page.evaluate(() => { window.__retryNode = document.getElementById('saveRetry'); });
+    await page.click('#saveRetry');
+    assert.equal(await page.evaluate(() => window.__retryNode === document.getElementById('saveRetry')), true, 'same button after a failed retry');
+    await page.click('#langSeg [data-lang=zh]');
+    assert.match(await page.locator('#saveAlert .save-alert-text').textContent(), /沒有存到/);
+    // space freed, a backup restored: everything is saved, the alert goes and leaving no longer asks
+    await page.evaluate(() => { window.__full = false; });
+    await upload(page, backup()); await page.click('#__confirmBtn');
+    assert.equal(await page.locator('#saveAlert').isVisible(), false);
+    assert.equal(await page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; }), false);
   } finally { await context.close(); }
 });
