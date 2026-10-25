@@ -113,13 +113,35 @@
     if (raw!==null) recoveryRaw = raw;
     return null;
   }
+  // 每次存檔的結果都記下來：沒存到時畫面頂端一直顯示提醒（再試一次／下載備份），存好了才消失
+  var saveFailed = false;
   function writeLocalStorage(){
-    if (persistMode!=='local') return false;
-    try{
-      localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases}));
-      return true;
-    }catch(e){ return false; }
+    var ok = false;
+    if (persistMode==='local'){
+      try{
+        localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases}));
+        ok = true;
+      }catch(e){ ok = false; }
+    }
+    saveFailed = !ok;
+    updateSaveAlert();
+    return ok;
   }
+  function updateSaveAlert(){
+    var el = document.getElementById('saveAlert'); if (!el) return;
+    if (!saveFailed){ el.hidden = true; el.innerHTML = ''; return; }
+    var memory = persistMode!=='local';
+    el.innerHTML = '<div class="save-alert-text">'+esc(L(memory ? 'save_alertMemory' : 'save_alertFailed'))+'</div>'
+      + '<div class="save-alert-actions">'
+      + (memory ? '' : '<button type="button" class="btn small" id="saveRetry">'+esc(L('save_retry'))+'</button>')
+      + '<button type="button" class="btn small" id="saveBackup">'+esc(L('save_backup'))+'</button></div>';
+    el.hidden = false;
+    var r = document.getElementById('saveRetry');
+    if (r) r.onclick = function(){ if (!writeLocalStorage()){ var t = el.querySelector('.save-alert-text'); if (t) t.textContent = L('save_retryFailed'); } };
+    document.getElementById('saveBackup').onclick = function(){ exportBackupFile(); };
+  }
+  // 有變更還沒存到手機時，關掉或重新整理前請瀏覽器先問一聲
+  window.addEventListener('beforeunload', function(e){ if (saveFailed && persistMode==='local'){ e.preventDefault(); e.returnValue = ''; } });
 
   async function initPersistence(){
     try{

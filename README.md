@@ -20,6 +20,7 @@ GLP-1 注射與體重紀錄的個人網頁 App（純前端，沒有後端）。
 
 - 2026-10 第二批新增欄位（都是選填，舊資料照常讀）：`purchases`（帳本：`{date, medication, items:[{doseMg, qty}], price, place}`）；注射加 `medication`（`mounjaro`／`wegovy`）、`time`，部位多了 `c-abd-u`、`r-abd-m`、`l-abd-m`、`c-abd-l`；體重加 `time`、`musclePercent`、`waistCm`、`leanKg`、`custom:[{name, value}]`。有帳本紀錄時，累計花費以帳本為準。
 
+- 存檔失敗（例如手機儲存空間滿了、瀏覽器不允許儲存）時，頂端標題列一直顯示提醒，可「再試一次」或「下載備份」，下一次存成功才消失；有沒存到的變更時，關掉或重新整理前瀏覽器會先問。
 - 還原前會驗證日期、必要欄位與數值，失敗不改現有資料。舊備份未提供 `meals`／`purchases` 時，保留瀏覽器現有的對應紀錄。讀到損毀的既存資料時，先提供「下載原始資料」與還原／確認清除入口，不自動覆寫成示範資料。
 
 ## 回歸檢查
