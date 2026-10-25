@@ -202,11 +202,14 @@ test('a save that fails keeps a visible alert with retry and backup until a late
   const { context, page } = await fresh();
   try {
     assert.equal(await page.locator('#saveAlert').isVisible(), false);
+    const original = await stored(page);
     // storage full: every write of the records fails
     await page.evaluate(key => { const orig = Storage.prototype.setItem; window.__full = true; Storage.prototype.setItem = function (k, v) { if (k === key && window.__full) throw new DOMException('full', 'QuotaExceededError'); return orig.call(this, k, v); }; }, KEY);
     await page.click('[data-nav=diet]'); await page.click('#foodManual');
     await page.fill('#fm-name', 'Unsaved meal'); await page.fill('#fm-kcal', '400'); await page.click('#fm-save');
     await page.waitForSelector('#saveAlert:not([hidden])');
+    assert.equal(await stored(page), original, 'what was already saved stays as it was');
+    await page.click('[data-nav=diet]'); assert.ok((await page.locator('#view-diet').textContent()).includes('Unsaved meal'), 'the new meal is still on screen');
     for (const view of ['home', 'weight', 'settings']) { await page.click(`[data-nav=${view}]`); assert.equal(await page.locator('#saveAlert').isVisible(), true, view); }
     assert.equal(await page.locator('#saveRetry').count(), 1); assert.equal(await page.locator('#saveBackup').count(), 1);
     assert.ok((await page.locator('#saveRetry').boundingBox()).height >= 44);
