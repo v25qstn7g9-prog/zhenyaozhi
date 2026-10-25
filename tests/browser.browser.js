@@ -260,3 +260,30 @@ test('the save alert follows the language, is not rebuilt on every failed save, 
     assert.equal(await page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; }), false);
   } finally { await context.close(); }
 });
+test('a backup that finishes after a new change does not stop the leave prompt (the change is not in it)', async () => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  try {
+    // a download that waits until the test lets it finish, and records what it saved
+    await context.addInitScript(() => { window.claude = { use: async name => name === 'downloads' ? { save: opts => new Promise(r => { window.__saved = opts.data; window.__finish = () => r(); }) } : null }; });
+    await context.route('**/*', route => new URL(route.request().url()).origin === new URL(BASE).origin ? route.continue() : route.abort());
+    const page = await context.newPage(); await page.goto(BASE); await page.waitForSelector('#quickWeight');
+    await page.evaluate(key => { const orig = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === key) throw new DOMException('full', 'QuotaExceededError'); return orig.call(this, k, v); }; }, KEY);
+    const addWeight = async kg => { await page.click('#quickWeight'); await page.fill('#wf-weight', String(kg)); await page.click('#wf-save'); };
+    await addWeight(77.7);
+    await page.waitForSelector('#saveAlert:not([hidden])');
+    await page.click('#saveBackup');                       // the download starts with 77.7 in it…
+    await page.waitForFunction(() => typeof window.__finish === 'function');
+    await addWeight(76.6);                                 // …a new weight is added while it is still going…
+    await page.evaluate(() => window.__finish());          // …and then the old download finishes
+    await page.waitForTimeout(100);
+    assert.ok(await page.evaluate(() => window.__saved.includes('77.7') && !window.__saved.includes('76.6')), 'the backup holds the earlier records only');
+    const leaveAsks = () => page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
+    assert.equal(await leaveAsks(), true, '76.6 is in no backup: leaving still asks');
+    assert.equal(await page.locator('#saveAlert').isVisible(), true);
+    // a backup made after the last change does stop it
+    await page.evaluate(() => { window.__finish = null; });
+    await page.click('#saveBackup'); await page.waitForFunction(() => typeof window.__finish === 'function'); await page.evaluate(() => window.__finish());
+    await page.waitForTimeout(100);
+    assert.equal(await leaveAsks(), false);
+  } finally { await context.close(); }
+});

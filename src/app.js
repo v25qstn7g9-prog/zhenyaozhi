@@ -115,7 +115,9 @@
   }
   // 每次存檔的結果都記下來：沒存到時畫面頂端一直顯示提醒（再試一次／下載備份），存好了才消失。
   // 所有寫入 LS_KEY 都經過 writeLocalStorage（還原也是），提醒狀態只在這裡決定。
-  var saveFailed = false, userChanged = false, backedUp = false, saveAlertKey = '';
+  // dataRevision goes up with every change of the records; a backup only counts for the revision it was made from
+  // (a change made while the download is still going makes it out of date)
+  var saveFailed = false, userChanged = false, backedUp = false, saveAlertKey = '', dataRevision = 0;
   // opts.seed: 範例資料（寫不進去不算使用者的變更）；opts.restore: 還原（失敗時手機裡的資料沒變，提醒狀態不變）；
   // opts.pref: 只改設定（例如語言），不算有紀錄要保護
   function writeLocalStorage(payload, opts){
@@ -126,7 +128,7 @@
     }
     if (opts.seed) return ok;
     if (ok || !opts.restore) saveFailed = !ok;
-    if (!opts.pref) { userChanged = true; backedUp = false; }
+    if (!opts.pref) { userChanged = true; backedUp = false; dataRevision++; }
     updateSaveAlert();
     return ok;
   }
@@ -148,8 +150,9 @@
       var b = document.getElementById('saveBackup');
       b.textContent = L('save_backup');
       b.onclick = function(){
+        var rev = dataRevision;   // the backup's contents are taken now (exportBackupFile builds the text first)
         exportBackupFile().then(function(res){
-          if (res && res.ok) backedUp = true;
+          if (res && res.ok && rev === dataRevision) backedUp = true;
           updateSaveAlert(exportResultMsg(res, 'save_backupFailed'));
         }, function(){ updateSaveAlert(L('save_backupFailed')); });
       };
@@ -265,7 +268,7 @@
     // Commit storage first: a failed write must also leave the in-memory records intact.
     if (persistMode==='local' && !writeLocalStorage(next, {restore:true})) return false;
     mem = next;
-    userChanged = true; backedUp = false;
+    userChanged = true; backedUp = false; dataRevision++;
     recoveryRaw = null;
     demoBannerDismissed = false;
     return true;
