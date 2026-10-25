@@ -118,8 +118,17 @@
   // dataRevision goes up with every change of the records; a backup only counts for the revision it was made from
   // (a change made while the download is still going makes it out of date)
   var saveFailed = false, userChanged = false, backedUp = false, saveAlertKey = '', dataRevision = 0;
+  // the records changed (a new record, a deletion, a restore): they need a new backup
+  function markRecordsChanged(){ userChanged = true; backedUp = false; dataRevision++; }
+  // a backup started now: when it finishes, it counts only if the records have not changed since
+  function backupFinished(rev, res){
+    if (!res || !res.ok) return exportResultMsg(res, 'save_backupFailed');
+    if (rev !== dataRevision) return L('save_backupOutdated');
+    backedUp = true;
+    return exportResultMsg(res, 'save_backupFailed');
+  }
   // opts.seed: 範例資料（寫不進去不算使用者的變更）；opts.restore: 還原（失敗時手機裡的資料沒變，提醒狀態不變）；
-  // opts.pref: 只改設定（例如語言），不算有紀錄要保護
+  // opts.pref: 只改設定（例如語言）；opts.retry: 再存一次同樣的資料 —— 這三種不算紀錄有變
   function writeLocalStorage(payload, opts){
     opts = opts || {};
     var ok = false, data = payload || {profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases};
@@ -128,7 +137,7 @@
     }
     if (opts.seed) return ok;
     if (ok || !opts.restore) saveFailed = !ok;
-    if (!opts.pref) { userChanged = true; backedUp = false; dataRevision++; }
+    if (!opts.pref && !opts.retry && !(opts.restore && !ok)) markRecordsChanged();
     updateSaveAlert();
     return ok;
   }
@@ -146,15 +155,12 @@
         + (memory ? '' : '<button type="button" class="btn small" id="saveRetry"></button>')
         + '<button type="button" class="btn small" id="saveBackup"></button></div><div class="save-alert-msg" role="status"></div>';
       var r = document.getElementById('saveRetry');
-      if (r){ r.textContent = L('save_retry'); r.onclick = function(){ if (!writeLocalStorage()) updateSaveAlert(L('save_retryFailed')); }; }
+      if (r){ r.textContent = L('save_retry'); r.onclick = function(){ if (!writeLocalStorage(null, {retry:true})) updateSaveAlert(L('save_retryFailed')); }; }
       var b = document.getElementById('saveBackup');
       b.textContent = L('save_backup');
       b.onclick = function(){
         var rev = dataRevision;   // the backup's contents are taken now (exportBackupFile builds the text first)
-        exportBackupFile().then(function(res){
-          if (res && res.ok && rev === dataRevision) backedUp = true;
-          updateSaveAlert(exportResultMsg(res, 'save_backupFailed'));
-        }, function(){ updateSaveAlert(L('save_backupFailed')); });
+        exportBackupFile().then(function(res){ updateSaveAlert(backupFinished(rev, res)); }, function(){ updateSaveAlert(L('save_backupFailed')); });
       };
       saveAlertKey = key;
     }
@@ -268,7 +274,7 @@
     // Commit storage first: a failed write must also leave the in-memory records intact.
     if (persistMode==='local' && !writeLocalStorage(next, {restore:true})) return false;
     mem = next;
-    userChanged = true; backedUp = false; dataRevision++;
+    if (persistMode!=='local') markRecordsChanged();   // (on this phone the write above already did)
     recoveryRaw = null;
     demoBannerDismissed = false;
     return true;
@@ -1091,8 +1097,11 @@
     document.getElementById('exportFileBtn').onclick = function(){
       var btn = this, orig = btn.textContent;
       btn.textContent = L('msg_processing');
+      var rev = dataRevision;   // a full backup from here also counts (for the records it holds)
       exportBackupFile().then(function(res){
-        btn.textContent = exportResultMsg(res, 'msg_exportFailed') || orig;
+        var stale = res && res.ok && rev !== dataRevision;
+        backupFinished(rev, res); updateSaveAlert();
+        btn.textContent = stale ? L('save_backupOutdated') : exportResultMsg(res, 'msg_exportFailed') || orig;
         setTimeout(function(){ btn.textContent = orig; }, 2200);
       });
     };

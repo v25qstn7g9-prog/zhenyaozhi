@@ -275,15 +275,20 @@ test('a backup that finishes after a new change does not stop the leave prompt (
     await page.waitForFunction(() => typeof window.__finish === 'function');
     await addWeight(76.6);                                 // …a new weight is added while it is still going…
     await page.evaluate(() => window.__finish());          // …and then the old download finishes
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => /又改了紀錄|changed your records/.test(document.querySelector('#saveAlert .save-alert-msg').textContent));
     assert.ok(await page.evaluate(() => window.__saved.includes('77.7') && !window.__saved.includes('76.6')), 'the backup holds the earlier records only');
     const leaveAsks = () => page.evaluate(() => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; });
     assert.equal(await leaveAsks(), true, '76.6 is in no backup: leaving still asks');
     assert.equal(await page.locator('#saveAlert').isVisible(), true);
     // a backup made after the last change does stop it
     await page.evaluate(() => { window.__finish = null; });
+    await page.click('#saveRetry');                        // trying to save again changes no record: it does not undo a backup
     await page.click('#saveBackup'); await page.waitForFunction(() => typeof window.__finish === 'function'); await page.evaluate(() => window.__finish());
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => /已下載|Downloaded|已送出|Sent/.test(document.querySelector('#saveAlert .save-alert-msg').textContent));
     assert.equal(await leaveAsks(), false);
+    await page.click('#saveRetry');
+    assert.equal(await leaveAsks(), false, 'a failed retry does not undo the backup');
+    await addWeight(75.5);
+    assert.equal(await leaveAsks(), true, 'a new change after the backup asks again');
   } finally { await context.close(); }
 });
