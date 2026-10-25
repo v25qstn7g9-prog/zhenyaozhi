@@ -113,13 +113,56 @@
     if (raw!==null) recoveryRaw = raw;
     return null;
   }
-  function writeLocalStorage(){
-    if (persistMode!=='local') return false;
-    try{
-      localStorage.setItem(LS_KEY, JSON.stringify({profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases}));
-      return true;
-    }catch(e){ return false; }
+  // 每次存檔的結果都記下來：沒存到時畫面頂端一直顯示提醒（再試一次／下載備份），存好了才消失。
+  // 所有寫入 LS_KEY 都經過 writeLocalStorage（還原也是），提醒狀態只在這裡決定。
+  var saveFailed = false, userChanged = false, backedUp = false, saveAlertKey = '';
+  // opts.seed: 範例資料（寫不進去不算使用者的變更）；opts.restore: 還原（失敗時手機裡的資料沒變，提醒狀態不變）；
+  // opts.pref: 只改設定（例如語言），不算有紀錄要保護
+  function writeLocalStorage(payload, opts){
+    opts = opts || {};
+    var ok = false, data = payload || {profile:mem.profile, weights:mem.weights, injections:mem.injections, meals:mem.meals, purchases:mem.purchases};
+    if (persistMode==='local'){
+      try{ localStorage.setItem(LS_KEY, JSON.stringify(data)); ok = true; }catch(e){ ok = false; }
+    }
+    if (opts.seed) return ok;
+    if (ok || !opts.restore) saveFailed = !ok;
+    if (!opts.pref) { userChanged = true; backedUp = false; }
+    updateSaveAlert();
+    return ok;
   }
+  function exportResultMsg(res, failedKey){
+    return !res || res.mode==='cancelled' ? '' : !res.ok ? L(failedKey) : L(res.mode==='share' ? 'msg_exportedShare' : 'msg_exportedFile');
+  }
+  function updateSaveAlert(msg){
+    var el = document.getElementById('saveAlert'); if (!el) return;
+    var memory = persistMode!=='local', show = saveFailed || memory;
+    if (!show){ el.hidden = true; el.innerHTML = ''; saveAlertKey = ''; return; }
+    var key = (memory ? 'm' : 'f') + '|' + LANG;
+    // 同一種提醒只建一次、文字沒變就不動：讀屏軟體不會每存一次就重念，按「再試一次」後焦點也還在按鈕上
+    if (key !== saveAlertKey){
+      el.innerHTML = '<div class="save-alert-text" role="alert"></div><div class="save-alert-actions">'
+        + (memory ? '' : '<button type="button" class="btn small" id="saveRetry"></button>')
+        + '<button type="button" class="btn small" id="saveBackup"></button></div><div class="save-alert-msg" role="status"></div>';
+      var r = document.getElementById('saveRetry');
+      if (r){ r.textContent = L('save_retry'); r.onclick = function(){ if (!writeLocalStorage()) updateSaveAlert(L('save_retryFailed')); }; }
+      var b = document.getElementById('saveBackup');
+      b.textContent = L('save_backup');
+      b.onclick = function(){
+        exportBackupFile().then(function(res){
+          if (res && res.ok) backedUp = true;
+          updateSaveAlert(exportResultMsg(res, 'save_backupFailed'));
+        }, function(){ updateSaveAlert(L('save_backupFailed')); });
+      };
+      saveAlertKey = key;
+    }
+    var text = el.querySelector('.save-alert-text'), t = L(memory ? 'save_alertMemory' : 'save_alertFailed');
+    if (text.textContent !== t) text.textContent = t;
+    var m = el.querySelector('.save-alert-msg');
+    if (msg !== undefined && m.textContent !== msg) m.textContent = msg;
+    el.hidden = false;
+  }
+  // 有變更還沒存到手機時，關掉或重新整理前請瀏覽器先問一聲（剛下載過備份就不問；不能儲存的瀏覽器：記過或還原過紀錄才問）
+  window.addEventListener('beforeunload', function(e){ if (!backedUp && (persistMode==='local' ? saveFailed : userChanged)){ e.preventDefault(); e.returnValue = ''; } });
 
   async function initPersistence(){
     try{
@@ -143,7 +186,7 @@
       mem.profile = defaultProfile();
       mem.weights = seed.weights;
       mem.injections = seed.injections;
-      writeLocalStorage();
+      writeLocalStorage(null, {seed:true});
     }
     sortData();
 
@@ -220,11 +263,9 @@
     next.weights.sort(byDateTime); next.injections.sort(byDateTime);
     next.purchases.sort(function(a,b){ return a.date.localeCompare(b.date); });
     // Commit storage first: a failed write must also leave the in-memory records intact.
-    if (persistMode==='local'){
-      try { localStorage.setItem(LS_KEY, JSON.stringify(next)); }
-      catch(e){ return false; }
-    }
+    if (persistMode==='local' && !writeLocalStorage(next, {restore:true})) return false;
     mem = next;
+    userChanged = true; backedUp = false;
     recoveryRaw = null;
     demoBannerDismissed = false;
     return true;
@@ -1011,8 +1052,9 @@
       b.onclick = function(){
         var newLang = this.getAttribute('data-lang');
         if (newLang===LANG) return;
-        saveProfile({lang:newLang}).then(function(){
-          LANG = newLang;
+        LANG = newLang;
+        mem.profile = Object.assign({}, mem.profile, {lang:newLang});
+        Promise.resolve(writeLocalStorage(null, {pref:true})).then(function(){
           updateNavLabels();
           updateDayBadge();
           switchView('settings');
@@ -1047,7 +1089,7 @@
       var btn = this, orig = btn.textContent;
       btn.textContent = L('msg_processing');
       exportBackupFile().then(function(res){
-        btn.textContent = res.mode==='cancelled' ? orig : !res.ok ? L('msg_exportFailed') : (res.mode==='share' ? L('msg_exportedShare') : L('msg_exportedFile'));
+        btn.textContent = exportResultMsg(res, 'msg_exportFailed') || orig;
         setTimeout(function(){ btn.textContent = orig; }, 2200);
       });
     };
@@ -2069,6 +2111,7 @@
   });
 
   function updateNavLabels(){
+    updateSaveAlert();
     document.getElementById('navLabelHome').textContent = L('nav_home');
     document.getElementById('navLabelWeight').textContent = L('nav_weight');
     document.getElementById('navLabelShot').textContent = L('nav_shot');

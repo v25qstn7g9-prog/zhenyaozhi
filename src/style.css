@@ -591,3 +591,12 @@
   [data-forma-theme="zhenyaozhi"] .hero-cat { width:32%; }
   [data-forma-theme="zhenyaozhi"] nav.bottom button span { font-size:12px; }
 }
+
+/* 存檔失敗的持續提醒（存好才消失）：放在固定在頂端的標題列裡，捲動時也看得到；只用既有的警示色 */
+.save-alert{grid-column:1/-1;margin:4px 0 0;padding:12px 14px;border:1px solid var(--warn);border-radius:var(--radius);background:var(--warn-soft);color:var(--ink);font-size:15px;line-height:1.5;}
+.save-alert[hidden]{display:none;}
+.save-alert-text{margin-bottom:8px;}
+.save-alert-msg:empty{display:none;}
+.save-alert-msg{margin-top:6px;font-size:15px;}
+.save-alert-actions{display:flex;flex-wrap:wrap;gap:8px;}
+.save-alert .btn.small{background:var(--surface);border:1px solid var(--warn);color:var(--ink);}
