@@ -773,6 +773,7 @@
     document.getElementById('quickWeight').onclick = openWeightForm;
     document.getElementById('quickShare').onclick = openShareSheet;
     document.getElementById('perKgTile').onclick = function(){ switchView('ledger'); };
+    document.getElementById('perKgTile').onkeydown = function(e){ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); this.onclick(); } };
   }
 
   var weightRange = '3m';
@@ -1008,32 +1009,32 @@
       '<div class="card">' +
         '<h2>'+esc(L('settings_profileTitle'))+'</h2>' +
         '<div class="field-row">' +
-          '<div class="field"><label>'+esc(L('settings_gender'))+'</label><select id="f-gender">' +
+          '<div class="field"><label for="f-gender">'+esc(L('settings_gender'))+'</label><select id="f-gender">' +
             '<option value="female"'+(p.gender==='female'?' selected':'')+'>'+esc(L('gender_female'))+'</option>' +
             '<option value="male"'+(p.gender==='male'?' selected':'')+'>'+esc(L('gender_male'))+'</option>' +
             '<option value="other"'+(p.gender==='other'?' selected':'')+'>'+esc(L('gender_other'))+'</option>' +
           '</select></div>' +
-          '<div class="field"><label>'+esc(L('settings_height'))+'</label><input id="f-height" type="number" inputmode="decimal" value="'+p.heightCm+'"></div>' +
+          '<div class="field"><label for="f-height">'+esc(L('settings_height'))+'</label><input id="f-height" type="number" inputmode="decimal" value="'+p.heightCm+'"></div>' +
         '</div>' +
         '<div class="field-row">' +
-          '<div class="field"><label>'+esc(L('settings_startWeight'))+'</label><input id="f-start" type="number" inputmode="decimal" value="'+p.startWeight+'"></div>' +
-          '<div class="field"><label>'+esc(L('settings_goalWeight'))+'</label><input id="f-goal" type="number" inputmode="decimal" value="'+p.goalWeight+'"></div>' +
+          '<div class="field"><label for="f-start">'+esc(L('settings_startWeight'))+'</label><input id="f-start" type="number" inputmode="decimal" value="'+p.startWeight+'"></div>' +
+          '<div class="field"><label for="f-goal">'+esc(L('settings_goalWeight'))+'</label><input id="f-goal" type="number" inputmode="decimal" value="'+p.goalWeight+'"></div>' +
         '</div>' +
       '</div>' +
       '<div class="card">' +
         '<h2>'+esc(L('settings_shotTitle'))+'</h2>' +
-        '<div class="field"><label>'+esc(L('settings_medication'))+'</label><input id="f-med" type="text" value="'+esc(p.medication)+'"></div>' +
+        '<div class="field"><label for="f-med">'+esc(L('settings_medication'))+'</label><input id="f-med" type="text" value="'+esc(p.medication)+'"></div>' +
         '<div class="field-row">' +
-          '<div class="field"><label>'+esc(L('settings_interval'))+'</label><input id="f-interval" type="number" inputmode="numeric" value="'+p.intervalDays+'"></div>' +
+          '<div class="field"><label for="f-interval">'+esc(L('settings_interval'))+'</label><input id="f-interval" type="number" inputmode="numeric" value="'+p.intervalDays+'"></div>' +
           (mem.purchases.length ?
             // Ledger total shown for reference only; the stored totalSpend is left untouched.
-            '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="text" value="'+esc(money(spendTotal()))+'" disabled></div>' :
-            '<div class="field"><label>'+esc(L('settings_spend'))+'</label><input id="f-spend" type="number" inputmode="decimal" value="'+p.totalSpend+'"></div>') +
+            '<div class="field"><label for="f-spend">'+esc(L('settings_spend'))+'</label><input id="f-spend" type="text" value="'+esc(money(spendTotal()))+'" disabled></div>' :
+            '<div class="field"><label for="f-spend">'+esc(L('settings_spend'))+'</label><input id="f-spend" type="number" inputmode="decimal" value="'+p.totalSpend+'"></div>') +
         '</div>' +
         (mem.purchases.length ? '<div class="note" style="margin:-6px 0 8px">'+esc(L('settings_spendLedger'))+'</div>' : '') +
         '<div class="toggle">' +
           '<div><div class="t-label">'+esc(L('settings_reminder'))+'</div><div class="t-sub">'+esc(L('settings_reminderNote'))+'</div></div>' +
-          '<div class="switch'+(p.remindersOn?' on':'')+'" id="remindToggle"><i></i></div>' +
+          '<div class="switch'+(p.remindersOn?' on':'')+'" id="remindToggle" role="switch" aria-checked="'+(!!p.remindersOn)+'" tabindex="0"><i></i></div>' +
         '</div>' +
       '</div>' +
       '<button class="btn primary block save-block" id="saveProfile">'+esc(L('btn_save'))+'</button>' +
@@ -1096,6 +1097,7 @@
     document.getElementById('remindToggle').onclick = function(){
       saveProfile({remindersOn: !mem.profile.remindersOn}).then(renderSettings);
     };
+    document.getElementById('remindToggle').onkeydown = function(e){ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); this.onclick(); } };
 
     function refreshAll(){ renderHome(); renderWeight(); renderShot(); renderLedger(); }
 
@@ -1155,7 +1157,40 @@
   /* ---------- forms (bottom sheet) ---------- */
   var overlay = document.getElementById('sheetOverlay');
   var sheetBody = document.getElementById('sheetBody');
-  function closeSheet(){ overlay.classList.remove('open'); }
+  var sheetTrigger = null;
+  var inertEls = [];
+  function sheetFocusables(){
+    return Array.prototype.filter.call(sheetBody.querySelectorAll('input, select, textarea, button, a[href]'), function(el){
+      return !el.disabled && el.offsetParent!==null && el.getAttribute('tabindex')!=='-1';
+    });
+  }
+  function onSheetKeydown(e){
+    if (e.key==='Escape'){ e.preventDefault(); closeSheet(); return; }
+    if (e.key!=='Tab') return;
+    var f = sheetFocusables();
+    if (!f.length) return;
+    var first = f[0], last = f[f.length-1];
+    if (e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  }
+  // Opens the bottom sheet, traps focus inside it and hides the rest of the app from AT until it closes.
+  function openSheet(){
+    sheetTrigger = document.activeElement;
+    overlay.classList.add('open');
+    inertEls = Array.prototype.filter.call(document.querySelectorAll('header.top, #main, nav.bottom'), function(el){ return !!el; });
+    inertEls.forEach(function(el){ el.inert = true; });
+    overlay.addEventListener('keydown', onSheetKeydown);
+    var f = sheetFocusables();
+    (f[0] || sheetBody).focus();
+  }
+  function closeSheet(){
+    overlay.classList.remove('open');
+    overlay.removeEventListener('keydown', onSheetKeydown);
+    inertEls.forEach(function(el){ el.inert = false; });
+    inertEls = [];
+    if (sheetTrigger && typeof sheetTrigger.focus==='function') sheetTrigger.focus();
+    sheetTrigger = null;
+  }
   overlay.addEventListener('click', function(e){ if (e.target===overlay) closeSheet(); });
 
   function openWeightForm(){
@@ -1181,7 +1216,7 @@
       (aiAvailable ?
         '<input type="file" id="wf-ai-input" accept="'+esc((sampleImgLimits.images.mediaTypes||['image/*']).join(','))+'" hidden>' +
         '<button class="btn ghost block" id="wf-ai-btn" type="button">'+ICON.camera+' '+esc(L('wf_aiImportBtn'))+'</button>' +
-        '<div class="note" id="wf-ai-msg" style="margin:8px 0 4px;min-height:14px"></div>'
+        '<div class="note" id="wf-ai-msg" role="status" aria-live="polite" style="margin:8px 0 4px;min-height:14px"></div>'
       : '') +
       '<div class="fcard"><div class="fc-title">'+esc(L('sf_when'))+'</div>' +
         '<div class="dt-row"><input type="date" id="wf-date" value="'+todayISO+'"><input type="time" id="wf-time" value="'+nowHM()+'"></div></div>' +
@@ -1197,20 +1232,20 @@
       '<div id="wf-more-box" hidden>' +
         '<div class="fcard">' +
           '<div class="field-row">' +
-            '<div class="field"><label>'+esc(L('wf_visceralFat'))+'</label><input type="number" inputmode="decimal" id="wf-visceral" step="1"></div>' +
-            '<div class="field"><label>'+esc(L('wf_waist'))+'</label><input type="number" inputmode="decimal" id="wf-waist" step="0.1"></div>' +
+            '<div class="field"><label for="wf-visceral">'+esc(L('wf_visceralFat'))+'</label><input type="number" inputmode="decimal" id="wf-visceral" step="1"></div>' +
+            '<div class="field"><label for="wf-waist">'+esc(L('wf_waist'))+'</label><input type="number" inputmode="decimal" id="wf-waist" step="0.1"></div>' +
           '</div>' +
           '<div class="field-row">' +
-            '<div class="field"><label>'+esc(L('wf_lean'))+'</label><input type="number" inputmode="decimal" id="wf-lean" step="0.1"></div>' +
-            '<div class="field"><label>'+esc(L('wf_score'))+'</label><input type="number" inputmode="numeric" id="wf-score" step="1"></div>' +
+            '<div class="field"><label for="wf-lean">'+esc(L('wf_lean'))+'</label><input type="number" inputmode="decimal" id="wf-lean" step="0.1"></div>' +
+            '<div class="field"><label for="wf-score">'+esc(L('wf_score'))+'</label><input type="number" inputmode="numeric" id="wf-score" step="1"></div>' +
           '</div>' +
           '<div id="wf-custom">'+lastCustom.map(function(c){ return customRow(c.name); }).join('')+'</div>' +
           '<button class="link-btn" id="wf-add-custom" type="button">＋ '+esc(L('wf_addCustom'))+'</button>' +
         '</div>' +
       '</div>' +
-      '<div class="note" id="wf-msg" style="min-height:14px;color:var(--warn)"></div>' +
+      '<div class="note" id="wf-msg" role="alert" style="min-height:14px;color:var(--warn)"></div>' +
       '<div class="sheet-foot two"><button class="btn" id="wf-cancel" type="button">'+esc(L('btn_cancel'))+'</button><button class="btn primary" id="wf-save" type="button">'+esc(L('btn_save'))+'</button></div>';
-    overlay.classList.add('open');
+    openSheet();
     sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
     document.getElementById('wf-cancel').onclick = closeSheet;
@@ -1364,15 +1399,15 @@
 
     sheetBody.innerHTML =
       sheetHead(L('pc_title')) +
-      '<div class="note pc-sub" id="pc-sub"></div>' +
+      '<div class="note pc-sub" id="pc-sub" role="status" aria-live="polite"></div>' +
       '<div class="fcard"><div class="fc-title">'+esc(L('pc_strength'))+'</div>' +
         medSeg('pc-med', med) + '<div style="height:10px"></div>' +
         '<div class="chip-grid" id="pc-doses"></div></div>' +
       '<div class="fcard"><div class="fc-title">'+esc(L('pc_desired'))+'</div>' +
         '<div class="unit-input"><input type="number" inputmode="decimal" step="0.05" min="0" id="pc-want"><span>mg</span></div></div>' +
-      '<div class="note pc-disc" id="pc-disc"></div>' +
+      '<div class="note pc-disc" id="pc-disc" role="status" aria-live="polite"></div>' +
       '<div class="sheet-foot pc-foot"><div class="pc-result" id="pc-result"></div></div>';
-    overlay.classList.add('open');
+    openSheet();
     sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
     var want = document.getElementById('pc-want');
@@ -1426,10 +1461,10 @@
         '<div id="sf-fig"></div>' +
         '<div class="fig-key"><span><i class="k-used"></i>'+esc(L('sf_keyUsed'))+'</span><span><i class="k-rec"></i>'+esc(L('sf_keyRec'))+'</span></div>' +
         '<div class="note" id="sf-navel">'+esc(L('shot_navelNote'))+'</div></div>' +
-      '<div class="note" id="sf-msg" style="min-height:14px;color:var(--warn)"></div>' +
+      '<div class="note" id="sf-msg" role="alert" style="min-height:14px;color:var(--warn)"></div>' +
       '<div class="sheet-foot"><div class="slide-save" id="sf-slide" tabindex="0" role="button" aria-label="'+esc(L('sf_slide'))+'">' +
         '<div class="ss-fill"></div><span class="ss-text">'+esc(L('sf_slide'))+' ›</span><div class="ss-knob">'+ICON.syringe+'</div></div></div>';
-    overlay.classList.add('open');
+    openSheet();
     sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
 
@@ -1571,9 +1606,9 @@
       '<div class="fcard"><div class="fc-title">'+esc(L('pf_place'))+'</div>' +
         '<div class="unit-input"><input type="text" id="pf-place" list="pf-places" maxlength="40" placeholder="'+esc(L('pf_placePh'))+'"></div>' +
         '<datalist id="pf-places">'+places.map(function(p){ return '<option value="'+esc(p)+'">'; }).join('')+'</datalist></div>' +
-      '<div class="note" id="pf-msg" style="min-height:14px;color:var(--warn)"></div>' +
+      '<div class="note" id="pf-msg" role="alert" style="min-height:14px;color:var(--warn)"></div>' +
       '<div class="sheet-foot two"><button class="btn" id="pf-cancel" type="button">'+esc(L('btn_cancel'))+'</button><button class="btn primary" id="pf-save" type="button">'+esc(L('btn_save'))+'</button></div>';
-    overlay.classList.add('open');
+    openSheet();
     sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
     document.getElementById('pf-cancel').onclick = closeSheet;
@@ -1743,7 +1778,7 @@
         '<div class="switch'+(show?' on':'')+'" id="shareToggle" role="switch" aria-checked="'+show+'" tabindex="0"><i></i></div></div>' +
       '<div class="note" id="shareMsg" style="min-height:14px"></div>' +
       '<div class="sheet-foot two"><button class="btn" id="shareSave" type="button">'+esc(L('share_save'))+'</button><button class="btn primary" id="shareGo" type="button">'+ICON.share+esc(L('share_go'))+'</button></div>';
-    overlay.classList.add('open');
+    openSheet();
     sheetBody.scrollTop = 0;
     document.getElementById('closeSheet').onclick = closeSheet;
     var msg = function(t){ document.getElementById('shareMsg').textContent = t||''; };
@@ -1851,7 +1886,7 @@
 
     document.getElementById('view-diet').innerHTML =
       '<div class="card wk-card">' +
-        '<div class="cal-head"><div class="m-label">'+esc(dateLabel)+'</div><div class="cal-nav"><button data-wk="-7" aria-label="prev">‹</button><button data-wk="7" aria-label="next">›</button></div></div>' +
+        '<div class="cal-head"><div class="m-label">'+esc(dateLabel)+'</div><div class="cal-nav"><button data-wk="-7" aria-label="'+esc(L('cal_prev'))+'">‹</button><button data-wk="7" aria-label="'+esc(L('cal_next'))+'">›</button></div></div>' +
         '<div class="wk-strip">'+days+'</div>' +
       '</div>' +
       '<div class="card">' +
@@ -1944,20 +1979,20 @@
         body = '<input type="file" id="fs-file" accept="image/*" capture="environment" hidden><input type="file" id="fs-album" accept="image/*" hidden>' +
           '<div class="photo-pick"><button class="btn primary" id="fs-cam">'+ICON.camera+esc(L('diet_takePhoto'))+'</button><button class="btn" id="fs-alb">'+esc(L('diet_album'))+'</button></div>' +
           '<div id="fs-preview"></div>' +
-          '<div class="field"><label>'+esc(L('diet_photoHint'))+'</label><input id="fs-hint" placeholder="'+esc(L('diet_photoHintPh'))+'"></div>';
+          '<div class="field"><label for="fs-hint">'+esc(L('diet_photoHint'))+'</label><input id="fs-hint" placeholder="'+esc(L('diet_photoHintPh'))+'"></div>';
       } else if (mode==='text'){
-        body = '<div class="field"><label>'+esc(L('diet_textLabel'))+'</label><textarea id="fs-text" rows="3" placeholder="'+esc(L('diet_textPh'))+'"></textarea></div>' +
+        body = '<div class="field"><label for="fs-text">'+esc(L('diet_textLabel'))+'</label><textarea id="fs-text" rows="3" placeholder="'+esc(L('diet_textPh'))+'"></textarea></div>' +
           '<button class="btn primary block" id="fs-est">'+esc(L('diet_estimate'))+'</button>';
       } else {
-        body = '<div class="field"><label>'+esc(L('diet_foodName'))+'</label><input id="fm-name" placeholder="'+esc(L('diet_foodNamePh'))+'"></div>' +
-          '<div class="field-row"><div class="field"><label>kcal</label><input id="fm-kcal" type="number" inputmode="decimal"></div><div class="field"><label>'+esc(L('mac_protein'))+' (g)</label><input id="fm-protein" type="number" inputmode="decimal"></div></div>' +
-          '<div class="field-row"><div class="field"><label>'+esc(L('mac_carbs'))+' (g)</label><input id="fm-carbs" type="number" inputmode="decimal"></div><div class="field"><label>'+esc(L('mac_fat'))+' (g)</label><input id="fm-fat" type="number" inputmode="decimal"></div><div class="field"><label>'+esc(L('mac_fiber'))+' (g)</label><input id="fm-fiber" type="number" inputmode="decimal"></div></div>' +
+        body = '<div class="field"><label for="fm-name">'+esc(L('diet_foodName'))+'</label><input id="fm-name" placeholder="'+esc(L('diet_foodNamePh'))+'"></div>' +
+          '<div class="field-row"><div class="field"><label for="fm-kcal">kcal</label><input id="fm-kcal" type="number" inputmode="decimal"></div><div class="field"><label for="fm-protein">'+esc(L('mac_protein'))+' (g)</label><input id="fm-protein" type="number" inputmode="decimal"></div></div>' +
+          '<div class="field-row"><div class="field"><label for="fm-carbs">'+esc(L('mac_carbs'))+' (g)</label><input id="fm-carbs" type="number" inputmode="decimal"></div><div class="field"><label for="fm-fat">'+esc(L('mac_fat'))+' (g)</label><input id="fm-fat" type="number" inputmode="decimal"></div><div class="field"><label for="fm-fiber">'+esc(L('mac_fiber'))+' (g)</label><input id="fm-fiber" type="number" inputmode="decimal"></div></div>' +
           '<button class="btn primary block" id="fm-save">'+esc(L('wf_save'))+'</button>';
       }
       sheetBody.innerHTML =
         '<div class="sheet-head"><h3>'+esc(L(mode==='photo'?'diet_photo':mode==='text'?'diet_text':'diet_manual'))+'</h3><button id="closeSheet" type="button" aria-label="close">✕</button></div>' +
         seg + '<div style="height:14px"></div>' + body +
-        '<div class="note" id="fs-msg" style="margin:10px 0;min-height:14px"></div>' +
+        '<div class="note" id="fs-msg" role="status" aria-live="polite" style="margin:10px 0;min-height:14px"></div>' +
         '<div class="note" style="margin-bottom:10px">'+esc(L('diet_disclaimer'))+'</div>' +
         '<div id="fs-items">'+itemsHTML()+'</div>' + footHTML();
       bind();
@@ -2029,7 +2064,7 @@
       }
     }
     draw();
-    overlay.classList.add('open');
+    openSheet();
   }
 
   /* ---------- AI analysis (Gemini, free web app — no API key stored in the page) ---------- */
@@ -2090,7 +2125,7 @@
         '<button class="btn ghost" id="aiCopyBtn">'+esc(L('ai_copyBtn'))+'</button>' +
         '<a class="btn primary" id="aiOpenBtn" href="https://gemini.google.com/app" target="_blank" rel="noopener">'+esc(L('ai_openBtn'))+'</a>' +
       '</div>';
-    overlay.classList.add('open');
+    openSheet();
     document.getElementById('closeSheet').onclick = closeSheet;
     document.getElementById('aiCopyBtn').onclick = function(){
       var btn = this;
@@ -2113,7 +2148,11 @@
     updateDayBadge();
     currentView = name;
     document.querySelectorAll('.view').forEach(function(v){ v.classList.toggle('active', v.getAttribute('data-view')===name); });
-    document.querySelectorAll('nav.bottom button').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-nav')===name); });
+    document.querySelectorAll('nav.bottom button').forEach(function(b){
+      var isActive = b.getAttribute('data-nav')===name;
+      b.classList.toggle('active', isActive);
+      if (isActive) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
     setTitle(name);
     if (name==='home') renderHome();
     if (name==='weight') renderWeight();

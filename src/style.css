@@ -16,7 +16,7 @@
     --teal-soft:#FBEAE5;
     --sage:#7FA48F;        /* goal line */
     --gold:#E9A55C;
-    --warn:#C0432E;
+    --warn:#B23D29;      /* 2026-10 darkened from #C0432E: 4.64:1 on --warn-soft (was 4.08:1, below AA 4.5:1) */
     --warn-soft:#F8E0DA;
     --hero-from:#A35644;   /* white text 5.0:1 */
     --hero-to:#AD5C4A;     /* 2026-10-18 壓深：下半部小字 #FFF8F5 4.54:1（原 #C26A58 3.64:1） */
