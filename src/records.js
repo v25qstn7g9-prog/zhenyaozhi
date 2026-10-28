@@ -3,8 +3,9 @@
   'use strict';
   var owns = function(obj, key){ return Object.prototype.hasOwnProperty.call(obj, key); };
   function object(value){ return value!==null && typeof value==='object' && !Array.isArray(value); }
-  function number(value, min, exclusive){
-    return typeof value==='number' && Number.isFinite(value) && (exclusive ? value>min : value>=min);
+  function number(value, min, exclusive, max){
+    return typeof value==='number' && Number.isFinite(value) && (exclusive ? value>min : value>=min) &&
+      (max==null || value<=max);
   }
   function text(value){ return typeof value==='string'; }
   function nonblank(value){ return text(value) && value.trim().length>0; }
@@ -41,11 +42,11 @@
   }
   function meal(record){
     return base(record) && oneOf(['breakfast','lunch','dinner','snack'])(record.meal) && nonblank(record.name) &&
-      number(record.kcal, 0) && ['protein','carbs','fat','fiber'].every(function(key){ return optional(record, key, function(value){ return number(value, 0); }); }) &&
+      number(record.kcal, 0, false, 5000) && ['protein','carbs','fat','fiber'].every(function(key){ return optional(record, key, function(value){ return number(value, 0); }); }) &&
       optional(record, 'portion', text) && optional(record, 'source', oneOf(['manual','photo','text']));
   }
   function purchase(record){
-    return base(record) && medication(record.medication) && number(record.price, 0, true) && optional(record, 'place', text) &&
+    return base(record) && medication(record.medication) && number(record.price, 0, true, 100000) && optional(record, 'place', text) &&
       Array.isArray(record.items) && record.items.length>0 && record.items.every(function(item){
         return object(item) && number(item.doseMg, 0, true) && Number.isSafeInteger(item.qty) && item.qty>0;
       });

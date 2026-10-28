@@ -426,22 +426,29 @@
   }
 
   async function importInBodyRows(rows){
+    var skipped = 0;
     rows.forEach(function(rec){
       var existing = mem.weights.find(function(w){ return w.date===rec.date; });
       if (existing){
-        existing.weightKg = rec.weightKg;
-        if (rec.fatPercent!=null) existing.fatPercent = rec.fatPercent;
-        if (rec.fatKg!=null) existing.fatKg = rec.fatKg;
-        if (rec.muscleKg!=null) existing.muscleKg = rec.muscleKg;
-        if (rec.visceralFat!=null) existing.visceralFat = rec.visceralFat;
-        if (rec.score!=null) existing.score = rec.score;
+        var candidate = Object.assign({}, existing, {
+          weightKg: rec.weightKg,
+          fatPercent: rec.fatPercent!=null ? rec.fatPercent : existing.fatPercent,
+          fatKg: rec.fatKg!=null ? rec.fatKg : existing.fatKg,
+          muscleKg: rec.muscleKg!=null ? rec.muscleKg : existing.muscleKg,
+          visceralFat: rec.visceralFat!=null ? rec.visceralFat : existing.visceralFat,
+          score: rec.score!=null ? rec.score : existing.score
+        });
+        if (!RECORDS.isWeight(candidate)){ skipped++; return; }
+        Object.assign(existing, candidate);
       } else {
-        rec.id = uuid();
-        mem.weights.push(rec);
+        var fresh = Object.assign({id:uuid()}, rec);
+        if (!RECORDS.isWeight(fresh)){ skipped++; return; }
+        mem.weights.push(fresh);
       }
     });
     sortData();
     writeLocalStorage();
+    return skipped;
   }
 
   /* ---------- helpers ---------- */
@@ -471,9 +478,7 @@
   function nextInjectionDate(){
     var li = latestInjection();
     var base = li ? li.date : mem.profile.startDate;
-    var d = new Date(base + 'T00:00:00');
-    d.setDate(d.getDate() + (mem.profile.intervalDays||7));
-    return d.toISOString().slice(0,10);
+    return isoShift(base, mem.profile.intervalDays||7);
   }
   function recentSites(n){
     var arr = mem.injections.slice(-n).reverse();
@@ -775,7 +780,7 @@
     if (weightRange==='all' || !mem.weights.length) return mem.weights;
     var days = weightRange==='1m'?30:weightRange==='3m'?90:180;
     var cutoff = new Date(); cutoff.setDate(cutoff.getDate()-days);
-    var cutIso = cutoff.toISOString().slice(0,10);
+    var cutIso = RECORDS.localDate(cutoff);
     return mem.weights.filter(function(w){ return w.date>=cutIso; });
   }
 
@@ -1124,9 +1129,10 @@
         }
         var dates = res.rows.map(function(r){ return r.date; }).sort();
         confirmInline(msg, L('msg_inbodyDetected', {n:res.rows.length, from:dates[0], to:dates[dates.length-1]}), L('msg_inbodyImportBtn'), function(){
-          importInBodyRows(res.rows).then(function(){
-            msg.style.color = 'var(--accent-text)';
-            msg.textContent = L('msg_inbodyImported', {n:res.rows.length});
+          importInBodyRows(res.rows).then(function(skipped){
+            var imported = res.rows.length - (skipped||0);
+            msg.style.color = skipped ? 'var(--warn)' : 'var(--accent-text)';
+            msg.textContent = skipped ? L('msg_inbodyImportedSkipped', {n:imported, skipped:skipped}) : L('msg_inbodyImported', {n:imported});
             refreshAll(); renderSettings();
           });
         });

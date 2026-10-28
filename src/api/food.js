@@ -33,7 +33,8 @@ function rateLimited(req) {
   const ip = String(req.headers["x-real-ip"] || req.headers["x-forwarded-for"] || "unknown").split(",")[0].trim();
   const now = Date.now();
   const list = (hits.get(ip) || []).filter((t) => now - t < 3600_000);
-  if (list.length >= HOURLY_LIMIT) { hits.set(ip, list); return true; }
+  if (list.length === 0) hits.delete(ip); else hits.set(ip, list);
+  if (list.length >= HOURLY_LIMIT) return true;
   list.push(now); hits.set(ip, list);
   return false;
 }
